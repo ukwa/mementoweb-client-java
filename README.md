@@ -1,7 +1,6 @@
-Memento Browser Branch
-======================
+Memento Java Client Library
+===========================
 
-This branch of the repository is linked to the SVN repo for the Memento Browser: http://code.google.com/p/memento-browser/
+This Java client library for the Memento protocol is based on the Android Memento Browser codebase: http://code.google.com/p/memento-browser/
 
-This branch should only be used to bring in updates from that repo - no development here please.
 
