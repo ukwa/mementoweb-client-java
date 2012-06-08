@@ -1,10 +1,9 @@
 package dev.memento;
 
-import android.util.Log;
+import org.apache.log4j.Logger;
 
 public class Link {
-	
-	private final String LOG_TAG = MementoBrowser.LOG_TAG;
+	Logger log = Logger.getLogger(Link.class.getCanonicalName());
 	
 	private String mUrl;
 	private String mRel;
@@ -28,7 +27,7 @@ public class Link {
 		// Grab URL
 		int index = link.indexOf(">;");
 		if (index == -1) {
-			Log.e(LOG_TAG, "Unable to find >; in [" + link + "]");
+			log.error("Unable to find >; in [" + link + "]");
 			return;
 		}
 		else
@@ -39,7 +38,7 @@ public class Link {
 		
 		String[] parts = link.split("\\s*;\\s*");
 		if (parts.length == 0) {
-			Log.e(LOG_TAG, "Unexpected format: [" + link + "]");
+			log.error("Unexpected format: [" + link + "]");
 			return;
 		}
 				
@@ -53,7 +52,7 @@ public class Link {
 			else if (part.startsWith("type="))
 				parseType(part);
 			else {
-				Log.e(LOG_TAG, "Unexpected value: [" + part + "] when looking for rel, datetime, or type");
+				log.error("Unexpected value: [" + part + "] when looking for rel, datetime, or type");
 				return;
 			}
 		}
@@ -61,15 +60,15 @@ public class Link {
 		// Make sure all parts were present
 		
 		if (mRel == null) {
-			Log.e(LOG_TAG, "Missing rel for memento in: [" + link + "]");		
+			log.error("Missing rel for memento in: [" + link + "]");		
 		}
 		else if (mRel.contains("memento")) {									
 			if (mDatetime == null)
-				Log.e(LOG_TAG, "Missing datetime for memento in: [" + link + "]");		
+				log.error("Missing datetime for memento in: [" + link + "]");		
 		}
 		else if (mRel.equals("timemap")) {
 			if (mType == null)
-				Log.e(LOG_TAG, "Missing type for timemap in: [" + link + "]");		
+				log.error("Missing type for timemap in: [" + link + "]");		
 		}
 	}
 	
@@ -93,7 +92,7 @@ public class Link {
 			mRel = rel;
 		}
 		else {
-			Log.e(LOG_TAG, "Undefined rel: [" + rel + "]");
+			log.error("Undefined rel: [" + rel + "]");
 			return;
 		}    
 	}

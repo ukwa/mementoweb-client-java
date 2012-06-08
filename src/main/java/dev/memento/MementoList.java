@@ -26,15 +26,13 @@ import java.util.ArrayList;
 import java.util.SortedSet;
 import java.util.TreeSet;
 
-import android.util.Log;
-
+import org.apache.log4j.Logger;
 
 public class MementoList extends ArrayList<Memento> implements Serializable {
+	Logger log = Logger.getLogger(MementoList.class.getCanonicalName());
 
 	private static final long serialVersionUID = 1L;
 
-	public static final String LOG_TAG = "MementoBrowser_tag";
-	
 	private SortedSet <String> mYearList;
 	
 	// The currently selected memento
@@ -167,7 +165,7 @@ public class MementoList extends ArrayList<Memento> implements Serializable {
 			return get(mCurrent);
 		}
 		else {
-			Log.d(LOG_TAG, "getPrevious: Unable to find previous. mCurrent=" + mCurrent);
+			log.debug("getPrevious: Unable to find previous. mCurrent=" + mCurrent);
 			return null;
 		}			
 	}

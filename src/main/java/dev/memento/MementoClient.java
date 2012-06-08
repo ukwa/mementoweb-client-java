@@ -28,67 +28,27 @@ package dev.memento;
 import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.MalformedURLException;
-import java.net.URL;
-import java.text.DateFormat;
-import java.text.SimpleDateFormat;
-import java.util.HashMap;
+import java.net.URI;
+import java.net.URISyntaxException;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.http.Header;
+import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
 import org.apache.http.ParseException;
 import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.ClientPNames;
+import org.apache.http.conn.params.ConnRoutePNames;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.util.EntityUtils;
+import org.apache.log4j.Logger;
 
-import android.app.Activity;
-import android.app.AlertDialog;
-import android.app.DatePickerDialog;
-import android.app.Dialog;
-import android.content.Context;
-import android.content.DialogInterface;
-import android.content.Intent;
-import android.content.SharedPreferences;
-import android.content.DialogInterface.OnDismissListener;
-import android.graphics.Bitmap;
-import android.graphics.BitmapFactory;
-import android.graphics.drawable.BitmapDrawable;
-import android.net.Uri;
-import android.os.Bundle;
-import android.os.Handler;
-import android.preference.PreferenceManager;
-import android.util.Log;
-import android.view.KeyEvent;
-import android.view.LayoutInflater;
-import android.view.Menu;
-import android.view.MenuInflater;
-import android.view.MenuItem;
-import android.view.MotionEvent;
-import android.view.View;
-import android.view.Window;
-import android.view.View.OnFocusChangeListener;
-import android.view.View.OnKeyListener;
-import android.view.View.OnTouchListener;
-import android.view.inputmethod.InputMethodManager;
-import android.webkit.WebBackForwardList;
-import android.webkit.WebChromeClient;
-import android.webkit.WebHistoryItem;
-import android.webkit.WebView;
-import android.webkit.WebViewClient;
-import android.widget.Button;
-import android.widget.DatePicker;
-import android.widget.ProgressBar;
-import android.widget.TextView;
-import android.widget.Toast;
 
-public class MementoBrowser extends Activity {
-	
-	public static final String LOG_TAG = "MementoBrowser_tag";
+public class MementoClient {
+	Logger log = Logger.getLogger(MementoClient.class.getCanonicalName());
 	
 	static final int DIALOG_DATE = 0;
     static final int DIALOG_ERROR = 1;
@@ -97,23 +57,9 @@ public class MementoBrowser extends Activity {
     static final int DIALOG_HELP = 4;
     
 	private String mDefaultTimegateUri;
-	private String[] mTimegateUris;
+	private String[] mTimegateUris = { "http://mementoproxy.lanl.gov/aggr/timegate/" , "http://mementoproxy.lanl.gov/google/timegate/" };
 	
-	private WebView mWebview;
-	
-	private TextView mLocation;
-	
-	private Button mNextButton;
-	private Button mPreviousButton;
-			
-	// For showing the page loading progress
-	private ProgressBar mProgressBar;
-	
-	private TextView mDateChosenButton;
-	private TextView mDateDisplayedView;
     private SimpleDateTime mDateChosen;
-    private SimpleDateTime mDateDisplayed;    
-    private SimpleDateTime mToday;
         
     private TimeBundle mTimeBundle;
     private TimeMap mTimeMap;
@@ -125,551 +71,32 @@ public class MementoBrowser extends Activity {
     
     // Used when selecting a memento
     int mSelectedYear = 0;
-    
+
     // Used in http requests
     public String mUserAgent;
-    
-    // Hold favicons for certain websites.  This can be removed when we figure out
-    // how to access the favicons for the WebView.  This is an outstanding problem
-    // that I've solicited for help on StackOverflow:
-    // http://stackoverflow.com/questions/3462582/display-the-android-webviews-favicon
-    private HashMap<String,Bitmap> mFavicons;
-    
-    // The original URL that we are visiting
-    private String mOriginalUrl;
-    
-    // The URL currently displayed in the browser
-    private String mCurrentUrl;
-    
-    private String mPageTitle;
-    
-   // private String mRedirectUrl;
-    
+
     private CharSequence mErrorMessage;
-    
-    // Need handler for callbacks to the UI thread
-    final Handler mHandler = new Handler();
-    
-    // Create runnable for posting
-    final Runnable mUpdateResults = new Runnable() {
-        public void run() {
-            updateResultsInUi();
-        }
-    };
-    
-    final Runnable mUpdateNextPrev = new Runnable() {
-        public void run() {
-       	
-        	if (mErrorMessage == null) {
-        		setEnableForNextPrevButtons();
-        	}
-        	else {
-        		mNextButton.setEnabled(false);
-        		mPreviousButton.setEnabled(false);
-        		displayError(mErrorMessage.toString());
-        	}
-        	
-        	// Since making requests are over, hide progress bar
-        	// BUT... the page may still be downloading, so don't hide
-        	//mProgressBar.setVisibility(View.GONE);        	
-        }       	
-        
-    };
-    
-    	
-    /** Called when the activity is first created. */
-    @Override
-    public void onCreate(Bundle savedInstanceState) {
-        super.onCreate(savedInstanceState);
-        requestWindowFeature(Window.FEATURE_NO_TITLE);
-        
-        setContentView(R.layout.main);            
-               
-        mUserAgent = getApplicationContext().getText(R.string.user_agent).toString();
-        
-        // Set the date and time format
-        SimpleDateTime.mDateFormat = android.text.format.DateFormat.getDateFormat(getApplicationContext());
-        SimpleDateTime.mTimeFormat = android.text.format.DateFormat.getTimeFormat(getApplicationContext());        
 
-        
-        mDateChosenButton = (Button) findViewById(R.id.dateChosen);
-        mDateDisplayedView = (TextView) findViewById(R.id.dateDisplayed);
-
-        
-        // Launch the DatePicker dialog box
-        mDateChosenButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {            	                
-                showDialog(DIALOG_DATE);                	
-            }
-        });
-        
-        // Set the current date
-        mToday = new SimpleDateTime();   
-        
-        // Handle change in orientation gracefully
-        if (savedInstanceState == null) {
-        	mCurrentUrl = getApplicationContext().getText(R.string.homepage).toString();
-        	mOriginalUrl = mCurrentUrl;
-        	        	     
-            setChosenDate(mToday);       
-            setDisplayedDate(mToday);
-            
-            mMementos = new MementoList();
-        }
-        else {
-        	mCurrentUrl = savedInstanceState.getString("mCurrentUrl");        	
-        	mDateChosen = (SimpleDateTime) savedInstanceState.getSerializable("mDateChosen");
-        	mDateDisplayed = (SimpleDateTime) savedInstanceState.getSerializable("mDateDisplayed");
-        	
-        	setChosenDate(mDateChosen);       
-            setDisplayedDate(mDateDisplayed);            
-        }
-    	
-        
-        mTimegateUris = getResources().getStringArray(R.array.listTimegates);
-        
-        // Add some favicons of web archives used by proxy server
-        mFavicons = new HashMap<String, Bitmap>();        
-        mFavicons.put("ia", BitmapFactory.decodeResource(getResources(), 
-	              R.drawable.ia_favicon));
-        mFavicons.put("webcite", BitmapFactory.decodeResource(getResources(), 
-	              R.drawable.webcite_favicon));
-        mFavicons.put("national-archives", BitmapFactory.decodeResource(getResources(), 
-	              R.drawable.national_archives_favicon));
-        
-               
-        mProgressBar = (ProgressBar) findViewById(R.id.progressBar);
-        mProgressBar.setVisibility(View.GONE);
-                                       
-        mLocation = (TextView) findViewById(R.id.locationEditText);
-        mLocation.setSelectAllOnFocus(true);   
-        
-        mLocation.setOnFocusChangeListener(new OnFocusChangeListener() {
-			@Override
-			public void onFocusChange(View v, boolean hasFocus) {
-				// Replace title with URL when focus is lost
-				if (hasFocus) 
-					mLocation.setText(mCurrentUrl);
-				else if (mPageTitle.length() > 0)
-					mLocation.setText(mPageTitle);
-			}        	
-        });
-        
-        mLocation.setOnKeyListener(new OnKeyListener() {
-			@Override
-			public boolean onKey(View v, int keyCode, KeyEvent event) {
-				//Log.d(LOG_TAG, "keyCode = " + keyCode + "   event = " + event.getAction());
-								
-				// Go to URL if user presses Go button
-				if (event.getAction() == KeyEvent.ACTION_DOWN &&
-						keyCode == KeyEvent.KEYCODE_ENTER) {
-									
-					mOriginalUrl = fixUrl(mLocation.getText().toString());
-					
-					// Access live version if date is today or in the future
-	            	if (mToday.compareTo(mDateChosen) <= 0) {
-	            		Log.d(LOG_TAG, "Browsing to " + mOriginalUrl);
-	            		mWebview.loadUrl(mOriginalUrl);
-	            		
-	            		// Clear since we are visiting a different page in the present
-	            		mMementos.clear();
-	            	}
-	            	else 
-	            		makeMementoRequests();	            	
-	            	
-	            	// Hide the virtual keyboard
-	            	((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))  
-	                	.hideSoftInputFromWindow(mLocation.getWindowToken(), 0);  
-					return true;
-				}
-					
-				return false;
-			}
-        	
-        });
-        
-        
-        // TEST        
-        /*
-        Context context = getBaseContext();
-        Drawable image = getImage(context, "http://web.archive.org/favicon.ico");
-        if (image == null) {
-        	System.out.println("image is null !!");
-        }
-        else {
-        	//image.setBounds(5, 5, 5, 5);
-			//ImageView imgView = new ImageView(context);
-			//ImageView imgView = (ImageView)findViewById(R.id.imagetest);
-			//imgView.setImageDrawable(image);
-	        mLocation.setCompoundDrawablesWithIntrinsicBounds(image, null, null, null);
-        }
-		*/                       
-        
-        mNextButton = (Button) findViewById(R.id.next);
-        mNextButton.setEnabled(false);
-        mNextButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-            	// Advance to next Memento
-            	
-            	// This could happen if the index has not been set yet
-            	if (mMementos.getCurrentIndex() < 0) {
-            		int index = mMementos.getIndex(mDateDisplayed);
-            		if (index < 0) {
-            			Log.d(LOG_TAG, "Could not find next Memento after date " + mDateDisplayed);
-            			return;
-            		}
-            		else 
-            			mMementos.setCurrentIndex(index);            		
-            	}
-            	            	           	
-            	// Locate the next Memento in the list
-            	Memento nextMemento = mMementos.getNext();
-            	            	
-            	if (nextMemento == null) {
-            		Log.d(LOG_TAG, "Still could not find next Memento!");
-            		Log.d(LOG_TAG, "Current index is " + mMementos.getCurrentIndex()); 
-            	}
-            	else {
-            		SimpleDateTime date = nextMemento.getDateTime();
-            		setChosenDate(nextMemento.getDateTime());
-            		showToast("Time travelling to next Memento on " + mDateChosen.dateFormatted());
-            		
-            		mDateDisplayed = date;
-            		
-					String redirectUrl = nextMemento.getUrl();
-					Log.d(LOG_TAG, "Sending browser to " + redirectUrl);
-					mWebview.loadUrl(redirectUrl);
-					
-					// Just in case it wasn't already enabled
-					mPreviousButton.setEnabled(true);
-					
-					// If this is the last memento, disable button
-					if (mMementos.isLast(date))
-						mNextButton.setEnabled(false);
-            	}
-            }
-        });
-        mPreviousButton = (Button) findViewById(R.id.previous);
-        mPreviousButton.setEnabled(false);
-        mPreviousButton.setOnClickListener(new View.OnClickListener() {
-            public void onClick(View v) {
-            	// Advance to previous Memento
-            	
-            	// This could happen if the index has not been set yet
-            	if (mMementos.getCurrentIndex() < 0) {
-	            	int index = mMementos.getIndex(mDateDisplayed);
-	        		if (index < 0) {
-	        			Log.d(LOG_TAG, "Could not find previous Memento before date " + mDateDisplayed);
-	        			return;
-	        		}
-	        		else 
-	        			mMementos.setCurrentIndex(index);
-            	}
-        		            	
-            	// Locate the prev Memento in the list
-            	Memento prevMemento = mMementos.getPrevious();
-            	            	            	
-            	if (prevMemento == null) {
-            		Log.d(LOG_TAG, "Still could not find previous Memento!");
-            		Log.d(LOG_TAG, "Current index is " + mMementos.getCurrentIndex()); 
-            	}
-            	else {
-            		SimpleDateTime date = prevMemento.getDateTime();
-            		setChosenDate(date);
-            		showToast("Time travelling to previous Memento on " + mDateChosen.dateFormatted());
-            	            		
-            		mDateDisplayed = date;
-            		
-					String redirectUrl = prevMemento.getUrl();
-					Log.d(LOG_TAG, "Sending browser to " + redirectUrl);
-					mWebview.loadUrl(redirectUrl);
-					
-					// Just in case it wasn't already enabled
-					mNextButton.setEnabled(true);
-					
-					// If this is the first memento, disable button
-					if (mMementos.isFirst(date))
-						mPreviousButton.setEnabled(false);
-            	}
-            }
-        }); 
-               
-        
-        mWebview = (WebView) findViewById(R.id.webview);
-        mWebview.setWebViewClient(new MementoWebViewClient()); 
-        mWebview.setWebChromeClient(new MementoWebChromClient());
-        mWebview.getSettings().setJavaScriptEnabled(true);
-        mWebview.loadUrl(mCurrentUrl);        
-        
-        mWebview.setOnTouchListener(new OnTouchListener() {
-			@Override
-			public boolean onTouch(View v, MotionEvent event) {		
-				
-				// Set focus here so focus is removed from the location text field
-				// which will change the URL into the page's title.
-				// There really should be a better way to do this, but it's a general
-				// problem that other developers have ran into as well:
-				// http://groups.google.com/group/android-developers/browse_thread/thread/9d1681a01f05e782?pli=1
-				
-				if (mLocation.hasFocus()) {
-					mWebview.requestFocus();
-					return true;
-				}
-				
-				// Hide the virtual keyboard
-            	((InputMethodManager) getSystemService(Context.INPUT_METHOD_SERVICE))  
-                	.hideSoftInputFromWindow(mLocation.getWindowToken(), 0);  
-				
-				return false;
-			}        	
-        });
-        
-        //testMementos();
-    }
-    
-    @Override
-    public void onResume() {
-    	super.onResume();
-    	                
-    	// Get default timegate that was selected in the settings
-        SharedPreferences prefs = PreferenceManager.getDefaultSharedPreferences(this);
-        mDefaultTimegateUri = prefs.getString("defaultTimegate", mTimegateUris[0]);
-        
-        Log.d(LOG_TAG, "mDefaultTimegateUri = " + mDefaultTimegateUri);
-    }
-    
-    @Override
-    protected void onSaveInstanceState(Bundle outState) {		
-    	super.onSaveInstanceState(outState);
-    	Log.d(LOG_TAG, "-- onSaveInstanceState");
-    		
-    	outState.putSerializable("mDateChosen", mDateChosen);
-    	outState.putSerializable("mDateDisplayed", mDateDisplayed);
-    	outState.putString("mCurrentUrl", mCurrentUrl);
-    	outState.putString("mOriginalUrl", mOriginalUrl);
-    	outState.putString("mPageTitle", mPageTitle);
-    	Log.d(LOG_TAG, "** Num of mementos: " + mMementos.size());    	
-    	outState.putSerializable("mMementos", mMementos);
-    }
-
-    
-    @Override
-    protected void onRestoreInstanceState(Bundle savedInstanceState) {
-    	super.onRestoreInstanceState(savedInstanceState);
-    	Log.d(LOG_TAG, "-- onRestoreInstanceState");
-    	    	
-    	mOriginalUrl = savedInstanceState.getString("mOriginalUrl");
-    	mPageTitle = savedInstanceState.getString("mPageTitle");
-    	mMementos = (MementoList) savedInstanceState.getSerializable("mMementos");
-    	Log.d(LOG_TAG, "** Num of mementos: " + mMementos.size());    	
-    	
-    	if (mMementos != null) {
-    		mFirstMemento = mMementos.getFirst();
-    		mLastMemento = mMementos.getLast();    		
-    	}
-    	
-    	// Only enable buttons if viewing Mementos
-    	if (!mToday.equalsDate(mDateChosen))
-    		setEnableForNextPrevButtons();
-    }
-
-    @Override 
-    public boolean onCreateOptionsMenu(Menu menu) { 
-         super.onCreateOptionsMenu(menu);         	    
-         MenuInflater inflater = getMenuInflater();
-         inflater.inflate(R.menu.options_menu, menu);
-         return true;
-    } 
-    
-    @Override
-    public boolean onPrepareOptionsMenu(Menu menu) {
-        super.onPrepareOptionsMenu(menu);
-
-        // Only enable the "List" menu if there are Memento dates to display
-        MenuItem item = menu.findItem(R.id.menu_list);
-        item.setEnabled(mMementos.size() != 0);
-        
-        // Only enable "Return to Present" if we are not viewing the present
-        item = menu.findItem(R.id.menu_off);
-        item.setEnabled(!mToday.equalsDate(mDateChosen));
-
-        return true;
-    }
-    
+	private SimpleDateTime mDateDisplayed;
+   	
     private void returnToPresent() {
     	
-    	mToday = new SimpleDateTime();
-    	setChosenDate(mToday);
-    	setDisplayedDate(mToday);
-    	showToast("Returning to the present.");
-    	mNextButton.setEnabled(false);
-    	mPreviousButton.setEnabled(false);
-    	
-    	// It's possible if the user was going back a page to 
-		// be viewing an archived page.  This is just a hack for IA pages,
-		// so a more comprehensive solution should be implemented.
-		if (mOriginalUrl.startsWith("http://web.archive.org/"))
-			mOriginalUrl = convertIaUrlBack(mOriginalUrl);
-		
-    	mWebview.loadUrl(mOriginalUrl);			
+    	SimpleDateTime mToday = new SimpleDateTime();
+    	log.info("Returning to the present.");
     	mMementos.setCurrentIndex(-1);
     }
     
-    @Override
-    public boolean onOptionsItemSelected(MenuItem item) {
-        switch (item.getItemId()) {
-        case R.id.menu_off:
-        	// Turn off Memento and return to the present        	
-        	returnToPresent();        	
-            return true;
-            
-        case R.id.menu_settings:
-        	         						
-			startActivityForResult(new Intent(this, Settings.class), 0);
-			
-            return true;
-            
-        case R.id.menu_list:
-        	
-        	// We don't want to overwhelm the user with too many choices
-        	if (mMementos.size() > MAX_NUM_MEMENTOS_IN_LIST)
-        		showDialog(DIALOG_MEMENTO_YEARS);
-        	else
-        		showDialog(DIALOG_MEMENTO_DATES);
-        	
-            return true;
-            
-        case R.id.menu_help:        	
-        	// Open a browser to the project's Help page
-        	String url = getApplicationContext().getText(R.string.help_page).toString();
-        	Uri uri = Uri.parse(url);
-			startActivity(new Intent(Intent.ACTION_VIEW, uri));
-			
-        	return true;
-        }
-        
-        return false;
-    }
-    
-    
-    @Override
-    protected void onActivityResult(int requestCode, int resultCode, Intent data) {
-    	Log.d(LOG_TAG, "--onActivityResult requestCode = " + requestCode);
-    	
-        if (requestCode == 0) {
-        	// If the date/time settings were changed            
-            SimpleDateTime.mDateFormat = android.text.format.DateFormat.getDateFormat(getApplicationContext());
-            SimpleDateTime.mTimeFormat = android.text.format.DateFormat.getTimeFormat(getApplicationContext());
-            
-            refreshChosenDate();
-            refreshDisplayedDate();
-        }
-    }
-      
-
-	public Object fetchUrl(String address) throws MalformedURLException,IOException {
-		URL url = new URL(address);
-		Object content = url.getContent();
-		return content;
-	}
-    
-    private void setEnableForNextPrevButtons() {
-    	
-    	// Making these use equalsDate instead of equals could mean that the buttons
-    	// are disabled when there are multiple mementos with the same date at the
-    	// front or back of the list, but there's no great way to set this otherwise
-    	// since we are dealing with date granularity at times.
-    	
-    	// Make prev and next enabled only if we're not viewing the first and last mementos
-		if (mFirstMemento != null)
-			mPreviousButton.setEnabled(!mFirstMemento.getDateTime().equals(mDateDisplayed));
-		else
-			Log.d(LOG_TAG, "mFirstMemento is null !!");
-		
-		if (mLastMemento != null)
-			mNextButton.setEnabled(!mLastMemento.getDateTime().equals(mDateDisplayed));
-		else
-			Log.d(LOG_TAG, "mLastMemento is null !!");        
-    }
-    
-    private String fixUrl(String url) {
-    	if (!url.startsWith("http://") && !url.startsWith("https://"))
-    		url = "http://" + url;
-    	return url;
-    }
-    
-    private void setChosenDate(SimpleDateTime date) {
-    	mDateChosen = date;
-    	mDateChosenButton.setText(mDateChosen.dateFormatted());
-    }   
-       
     /**
-     * Set the chosen (request) date button.
-     * @param day
-     * @param month
-     * @param year
+     *  Helper to create a web-proxy-aware HttpClient:
+     * @return
      */
-    private void setChosenDate(int day, int month, int year) {
-    	Log.d(LOG_TAG, "setChosenDate: " + day + ":" + month + ":" + year);
-    	setChosenDate(new SimpleDateTime(day, month, year));    	
+    private HttpClient getHttpClient() {
+    	HttpClient httpclient = new DefaultHttpClient();
+    	HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
+    			Integer.parseInt(System.getProperty("http.proxyPort")), "http");
+    	httpclient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    	return httpclient;
     }
-    
-    private void refreshChosenDate() {
-    	mDateChosenButton.setText(mDateChosen.dateFormatted());
-    }
-    
-    private void setDisplayedDate(SimpleDateTime date) {
-    	mDateDisplayed = date;
-    	mDateDisplayedView.setText(mDateDisplayed.dateFormatted());
-    }    
-    
-    private void refreshDisplayedDate() {
-    	mDateDisplayedView.setText(mDateDisplayed.dateFormatted());
-    }
-       
-    
-    /**
-     * Start http requests on a new thread to retrieve the Mementos for the current URL. 
-     */
-    protected void makeMementoRequests() {
-
-    	// Ideally we should show some type of progress bar, but probably not the browsers'
-    	// which is downloading pages.
-    	//mProgressBar.setVisibility(View.VISIBLE);
-    	
-        // Fire off a thread to do some work that we shouldn't do directly in the UI thread
-        Thread t = new Thread() {
-            public void run() {
-            	            	
-            	makeHttpRequests(mOriginalUrl);
-            	
-            	// Enable or disable Next and Previous buttons
-            	mHandler.post(mUpdateNextPrev);           	
-            } 
-        };
-        t.start();
-    }
-
-    /**
-     * Ran from other threads to update the UI.  Shows a dialog box if there's an error. 
-     */
-    private void updateResultsInUi() {
-
-    	// Back in the UI thread        
-    	if (mErrorMessage == null) {
-    					
-    		// If we couldn't load the exact requested date, show the date 
-    		// that's being loaded.
-    		if (!mDateDisplayed.equalsDate(mDateChosen)) {
-    			showToast("Closest available is " + mDateDisplayed.dateFormatted());  
-    			
-    			this.refreshDisplayedDate();
-    		}    		
-    	}
-    	else
-    		showDialog(DIALOG_ERROR);
-    } 
-    
     
     /**
      * Make http requests using the Memento protocol to obtain a Memento or list
@@ -681,7 +108,7 @@ public class MementoBrowser extends Activity {
     	// http://mementoproxy.lanl.gov/aggr/timegate/http://example.com/
     	// Accept-Datetime: Tue, 24 Jul 2001 15:45:04 GMT    	   	
         
-    	HttpClient httpclient = new DefaultHttpClient();
+    	HttpClient httpclient = getHttpClient();
     	
     	// Disable automatic redirect handling so we can process the 302 ourself 
     	httpclient.getParams().setParameter(ClientPNames.HANDLE_REDIRECTS, false);
@@ -695,7 +122,7 @@ public class MementoBrowser extends Activity {
         String acceptDatetime;
         
         if (mFirstMemento != null && mFirstMemento.getDateTime().equals(mDateChosen)) {
-        	Log.d(LOG_TAG, "Changing chosen time to 23:59 since datetime matches first Memento.");
+        	log.debug("Changing chosen time to 23:59 since datetime matches first Memento.");
         	SimpleDateTime dt = new SimpleDateTime(mDateChosen);
         	dt.setToLastHour();
         	acceptDatetime = dt.longDateFormatted();
@@ -707,25 +134,25 @@ public class MementoBrowser extends Activity {
         httpget.setHeader("Accept-Datetime", acceptDatetime);
         httpget.setHeader("User-Agent", mUserAgent);
         
-        //Log.d(LOG_TAG, getHeadersAsString(response.getAllHeaders()));
+        //log.debug(getHeadersAsString(response.getAllHeaders()));
         
-        Log.d(LOG_TAG, "Accessing: " + httpget.getURI());
-        Log.d(LOG_TAG, "Accept-Datetime: " + acceptDatetime);
+        log.debug("Accessing: " + httpget.getURI());
+        log.debug("Accept-Datetime: " + acceptDatetime);
 
         HttpResponse response = null;
 		try {			
 			response = httpclient.execute(httpget);
 			
-			Log.d(LOG_TAG, "Response code = " + response.getStatusLine());
+			log.debug("Response code = " + response.getStatusLine());
 			
-			//Log.d(LOG_TAG, getHeadersAsString(response.getAllHeaders()));
+			//log.debug(getHeadersAsString(response.getAllHeaders()));
 		} catch (ClientProtocolException e) {
 			mErrorMessage = "Unable to contact proxy server. ClientProtocolException exception.";
-			Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+			log.error(getExceptionStackTraceAsString(e));
 			return;
 		} catch (IOException e) {
 			mErrorMessage = "Unable to contact proxy server. IOException exception.";
-			Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+			log.error(getExceptionStackTraceAsString(e));
 			return;
 		} finally {
 			// Deallocate all system resources
@@ -742,7 +169,7 @@ public class MementoBrowser extends Activity {
 		if (statusCode == 300) {
 			// TODO: Implement.  Right now the lanl proxy doesn't appear to be returning this
 			// code, so let's just ignore it for now.
-			Log.d(LOG_TAG, "Pick a URL from list");			
+			log.debug("Pick a URL from list");			
 		}
 		else if (statusCode == 302) {
 			// Send browser to Location URL
@@ -752,7 +179,7 @@ public class MementoBrowser extends Activity {
 			if (headers.length == 0) {
 				mErrorMessage = "Sorry, but there was an unexpected error that will " +
 					"prevent the Memento from being displayed. Try again in 5 minutes.";
-				Log.e(LOG_TAG, "Error: Location header not found in response headers.");
+				log.error("Error: Location header not found in response headers.");
 			}
 			else {
 				String redirectUrl = headers[0].getValue();
@@ -763,8 +190,7 @@ public class MementoBrowser extends Activity {
 					mDateDisplayed = d;
 					*/
 				
-				Log.d(LOG_TAG, "Sending browser to " + redirectUrl);
-				mWebview.loadUrl(redirectUrl);				
+				log.debug("Sending browser to " + redirectUrl);
 									
 				// We can't update the view directly since we're running
 				// in a thread, so use mUpdateResults to show a toast message
@@ -775,7 +201,7 @@ public class MementoBrowser extends Activity {
 				// Parse various Links
 				headers = response.getHeaders("Link");
 				if (headers.length == 0) {
-					Log.e(LOG_TAG, "Error: Link header not found in response headers.");
+					log.error("Error: Link header not found in response headers.");
 					mErrorMessage = "Sorry, but the Memento could not be accessed. Try again in 5 minutes.";
 				}
 				else {
@@ -789,7 +215,6 @@ public class MementoBrowser extends Activity {
 			    	mDateDisplayed = parseCsvLinks(linkValue);
 					
 					// Now that we know the date, update the UI to reflect it
-					mHandler.post(mUpdateResults);
 			    	
 					if (mTimeMap != null)
 						if (!accessTimeMap())
@@ -806,14 +231,14 @@ public class MementoBrowser extends Activity {
 			Header[] headers = response.getHeaders("Link");
 			
 			if (headers.length == 0) {
-				Log.d(LOG_TAG, "Error: Link header not found in 406 response headers.");
+				log.debug("Error: Link header not found in 406 response headers.");
 				//mErrorMessage = "Sorry, but there was an error in retreiving this Memento.";
 				
 				// The lanl proxy has it wrong.  It should return 404 when the URL is not
 				// present, so we'll just pretend this is a 404.
 				mErrorMessage = "Sorry, but there are no Mementos for this URL.";
 				
-				//Log.d(LOG_TAG, "BODY: " + EntityUtils.toString(response.getEntity());							
+				//log.debug("BODY: " + EntityUtils.toString(response.getEntity());							
 			}
 			else {
 				String linkValue = headers[0].getValue();
@@ -827,11 +252,11 @@ public class MementoBrowser extends Activity {
 					accessTimeMap();
 				
 				if (mFirstMemento == null || mLastMemento == null) {
-					Log.e(LOG_TAG, "Could not find first or last Memento in 406 response for " + url);
+					log.error("Could not find first or last Memento in 406 response for " + url);
 					mErrorMessage = "Sorry, but there was an error in retreiving this Memento.";
 				}
 				else {			
-					Log.d(LOG_TAG, "Not available in this date range (" + mFirstMemento.getDateTimeSimple() +
+					log.debug("Not available in this date range (" + mFirstMemento.getDateTimeSimple() +
 							" to " + mLastMemento.getDateTimeSimple() + ")");
 					
 					// According to Rob Sanderson (LANL), we will only get 406 when the date is too
@@ -839,17 +264,14 @@ public class MementoBrowser extends Activity {
 										
 					mDateDisplayed = new SimpleDateTime(mFirstMemento.getDateTime());
 					String redirectUrl = mFirstMemento.getUrl();
-					Log.d(LOG_TAG, "Sending browser to " + redirectUrl);
-					mWebview.loadUrl(redirectUrl);	
-					
-					mHandler.post(mUpdateResults);
+					log.debug("Sending browser to " + redirectUrl);
 				}
 			}
 		}
 		else {
 			mErrorMessage = "Sorry, but there was an unexpected error that will " +
 				"prevent the Memento from being displayed. Try again in 5 minutes.";
-			Log.e(LOG_TAG, "Unexpected response code in makeHttpRequests = " + statusCode);
+			log.error("Unexpected response code in makeHttpRequests = " + statusCode);
 		}               
     }
     
@@ -873,7 +295,7 @@ public class MementoBrowser extends Activity {
      * @param links
      * @return The datetime of the last item marked rel="memento"
      */
-    public SimpleDateTime parseCsvLinks(String links) {
+    private SimpleDateTime parseCsvLinks(String links) {
     	mMementos.clear();    	
     	mFirstMemento = null;
     	mLastMemento = null;
@@ -884,7 +306,7 @@ public class MementoBrowser extends Activity {
     	// show a list of available dates until they have all been parsed.
     	MementoList tempList = new MementoList();
     	
-    	Log.d(LOG_TAG, "Start parsing links");
+    	log.debug("Start parsing links");
 		String[] linkStrings = links.split("\",");
 				
     	// Place all Links into the array and then sort it based on date
@@ -894,7 +316,7 @@ public class MementoBrowser extends Activity {
 			if (!linkStr.endsWith("\""))
 				linkStr += "\"";
 			
-			//Log.d(LOG_TAG, linkStr);	
+			//log.debug(linkStr);	
 			
 			linkStr = linkStr.trim();
 			
@@ -904,14 +326,14 @@ public class MementoBrowser extends Activity {
 				Memento m = new Memento(link);
 				tempList.add(m);
 				
-				//Log.d(LOG_TAG, "Added memento " + m.toString());
+				//log.debug("Added memento " + m.toString());
 				
 				// Peel out all values in rel which are separated by white space
 				String[] items = link.getRelArray();
 				for (String r : items) {						
 					r = r.toLowerCase();
 					
-					//Log.d(LOG_TAG, "Processing rel [" + r + "]");
+					//log.debug("Processing rel [" + r + "]");
 					
 					// Change the Showing date to the memento's date
 					//if (link.mRel.equals("first-memento"))
@@ -937,64 +359,24 @@ public class MementoBrowser extends Activity {
     	    	
     	// Sorting can take a time.  Since the Lanl proxy already sorts them, let's
     	// comment this out for now.
-    	//Log.d(LOG_TAG, "Starting sort...");
+    	//log.debug("Starting sort...");
 		//Collections.sort(tempList);
     	
-		Log.d(LOG_TAG, "Finished parsing, found " + tempList.size() + " links");
+		log.debug("Finished parsing, found " + tempList.size() + " links");
 		
 		synchronized (mMementos) {
 			mMementos = tempList;
 		}
 				
 		if (date != null)
-			Log.d(LOG_TAG, "parseCsvLinks returning " + date.toString());
+			log.debug("parseCsvLinks returning " + date.toString());
 		else
-			Log.d(LOG_TAG, "parseCsvLinks returning null");
+			log.debug("parseCsvLinks returning null");
 		
 		return date;
     }
         
-    /**
-     * Callback when the user sets the date
-     */
-    private DatePickerDialog.OnDateSetListener mDateSetListener =
-        new DatePickerDialog.OnDateSetListener() {
 
-            public void onDateSet(DatePicker view, int year, 
-                                  int monthOfYear, int dayOfMonth) {
-            	setChosenDate(dayOfMonth, monthOfYear + 1, year);
-            	                	
-            	if (mToday.equalsDate(mDateChosen)) {            		
-            		returnToPresent();
-            	}
-            	else if (mToday.compareTo(mDateChosen) < 0) {
-            		showToast("We can't see the future.\nHow about the present?");            		
-            		returnToPresent();
-            	}
-            	else {
-            		showToast("Time travelling to " + mDateChosen.dateFormatted());                	
-            		makeMementoRequests();
-            	}
-            }
-        };
-    
-    /**
-     * Display toast message.
-     * @param message to display
-     */
-    private void showToast(String message) {
-    	Toast.makeText(getBaseContext(), message, Toast.LENGTH_LONG).show();
-    }
-    
-    /**
-     * Show error message in a dialog box.
-     * @param errorMsg
-     */
-    private void displayError(String errorMsg) {
-    	mErrorMessage = errorMsg;
-    	showDialog(DIALOG_ERROR);
-    }
-    
     /**
      * Change IA URLs back to their original.
      * 
@@ -1028,403 +410,6 @@ public class MementoBrowser extends Activity {
     }
     
     /**
-     * This is used to get the favicon from the web page, but it is not working...
-     * the onReceivedIcon() method is never called.
-     *
-     */
-    private class MementoWebChromClient extends WebChromeClient {
-    	
-    	@Override
-    	public void onReceivedIcon(WebView view, Bitmap icon) {
-    		Log.d(LOG_TAG, "onReceivedIcon icon = " + icon.toString());
-    	}
-    	
-    	@Override
-    	public void onReceivedTitle (WebView view, String title) {
-    		Log.d(LOG_TAG, "onReceivedTitle title = " + title);
-    		
-    		// Since we are replacing the URL with the page's title,
-    		// we should swap the URL back when the user tries to enter a new URL.    		
-    		if (title.length() > 0) 
-    			mLocation.setText(title);
-    			    		
-    		mPageTitle = title;
-    	}
-    	
-    }
-    
-    /**
-     * Callbacks for state changes in the WebView.
-     *
-     */
-    private class MementoWebViewClient extends WebViewClient {
-    	
-    	// Note: this method is *not* called when calling WebView's loadUrl().
-    	
-        @Override
-        public boolean shouldOverrideUrlLoading(WebView view, String url) {
-        	Log.d(LOG_TAG, "-- shouldOverrideUrlLoading");
-                    	
-        	// Fix partial URLs
-        	if (!url.startsWith("http://") && !url.startsWith("https://"))
-        		url = "http://" + url;
-        	
-        	Log.d(LOG_TAG, "Click on link " + url); 
-        	        	
-        	// Only time travel if selected date is in the past!
-        	if (mToday.compareTo(mDateChosen) <= 0) {
-        		view.loadUrl(url);
-        	
-        		// It's possible if the user was going back a page to 
-        		// be viewing an archived page.  This is just a hack for IA pages,
-        		// so a more comprehensive solution should be implemented.
-        		if (url.startsWith("http://web.archive.org/"))
-        			url = convertIaUrlBack(url);
-        		
-        		mCurrentUrl = url;
-        		
-        		Log.d(LOG_TAG, "mOriginalUrl = " + mOriginalUrl); 
-        		
-        		//if (!mMementos.getAssociatedUrl().equals(url)) {
-        		//	Log.d(LOG_TAG, "(1) Clearing all Mementos for new URL " + url);
-        		//	mMementos.clear();
-        		//}
-        		
-        		if (!mOriginalUrl.equals(url)) {
-        			Log.d(LOG_TAG, "(2) Clearing all Mementos for new URL " + url);
-        			mMementos.clear();
-        		}
-        			
-        		mOriginalUrl = url;
-        	}
-        	else {        				
-        		// User has clicked on a URL in an archived page, so we need the original
-        		// URL so we can find all its mementos
-        		url = convertIaUrlBack(url);        	
-        		Log.d(LOG_TAG, "Converted IA URL = " + url); 
-        		
-        		mOriginalUrl = url;        		
-        		makeMementoRequests();
-        	}        	          
-    		
-            return true;
-        }
-        
-        @Override
-        public void onReceivedError(WebView view, int errorCode, String description, String failingUrl) {
-        	//displayError(description);
-        	Log.d(LOG_TAG, "WebViewClient Error: [code=" + errorCode + "] " + description +
-        			" [URL=" + failingUrl + "]");
-        }
-        
-        @Override
-        public void onPageStarted(WebView view, String url, Bitmap favicon) {
-        	Log.d(LOG_TAG, "-- onPageStarted");
-        	
-        	mCurrentUrl = url;
-
-        	mProgressBar.setVisibility(View.VISIBLE);
-        	
-        	// Show date here because it can take a long time before it finishes downloading
-        	Log.d(LOG_TAG, "mDateDisplayed: " + mDateDisplayed.dateFormatted());
-        	mDateDisplayedView.setText(mDateDisplayed.dateFormatted());
-        	
-        	/* THIS WAS A HACK TO GET THE FAVICON, BUT I DO NOT SUGGEST USING IT
-        	 * SINCE THERE ARE MANY DIFFERENT METHODS USED TO PUBLISH FAVICONS, AND
-        	 * THIS METHOD IS NOT USING CACHING.
-        	 * 
-        	// Grab website favicon
-        	Context context = view.getContext();
-            Drawable image = getImage(context, getBaseUrl(url) + "favicon.ico");
-            if (image == null) {
-            	System.out.println("image is null !!");
-            }
-            else {
-    	        mLocation.setCompoundDrawablesWithIntrinsicBounds(image, null, null, null);
-            }
-            */
-        	
-        	if (favicon == null) {
-        		// Display a favicon for some of the web archives
-        		
-        		Log.d(LOG_TAG, "No favicon - null");
-        		
-        		// Use our built-in favicons since this isn't working
-        		if (url.startsWith("http://webcitation.org")) 
-        			favicon = mFavicons.get("webcite");      
-        		else if (url.startsWith("http://web.archive.org")) 
-        			favicon = mFavicons.get("ia");
-        		else if (url.startsWith("http://webarchive.nationalarchives")) 
-        			favicon = mFavicons.get("national-archives");
-        		else
-        			mLocation.setCompoundDrawablesWithIntrinsicBounds(null, null, null, null);  
-        		
-        		if (favicon != null) {
-        			BitmapDrawable bd = new BitmapDrawable(favicon);        	
-            		mLocation.setCompoundDrawablesWithIntrinsicBounds(bd, null, null, null);  
-        		}
-        			
-        	}
-        	else {
-        		Log.d(LOG_TAG, "favicon h and w = " + favicon.getHeight() + " " + favicon.getWidth());
-        		BitmapDrawable bd = new BitmapDrawable(favicon);        	
-        		mLocation.setCompoundDrawablesWithIntrinsicBounds(bd, null, null, null);        		
-        	}
-        	
-        	/*  THIS CODE IS NOT WORKING EITHER
-        	favicon = view.getFavicon();
-        	if (favicon == null) {
-        		Log.d(LOG_TAG, "No favicon from getFavicon - null");
-        	}
-        	else {
-        		Log.d(LOG_TAG, "getFavicon favicon h and w = " + favicon.getHeight() + " " + favicon.getWidth());
-        		BitmapDrawable bd = new BitmapDrawable(favicon);        	
-        		mLocation.setCompoundDrawablesWithIntrinsicBounds(bd, null, null, null);        		
-        	}
-        	*/
-        }
-        
-        @Override
-        public void onPageFinished(WebView view, String url) {
-        	mProgressBar.setVisibility(View.GONE);
-        	
-        	//if (mLocation.isInEditMode()) {
-        	if (mLocation.isSelected())
-        		Log.d(LOG_TAG, "Editor is in edit mode, so don't erase text!");        	
-        	//else
-        	//	mLocation.setText(url);
-        	
-        	Log.d(LOG_TAG, "-- onPageFinished... mDateDisplayed: " + mDateDisplayed.dateFormatted());
-        	
-        	/*
-        	 * THIS CODE IS NOT WORKING EITHER.
-        	Bitmap favicon = view.getFavicon();
-        	if (favicon == null) {
-        		Log.d(LOG_TAG, "No favicon in onPageFinished - null");
-        	}
-        	else {
-        		Log.d(LOG_TAG, "onPageFinished favicon h and w = " + favicon.getHeight() + " " + favicon.getWidth());
-        		BitmapDrawable bd = new BitmapDrawable(favicon);        	
-        		mLocation.setCompoundDrawablesWithIntrinsicBounds(bd, null, null, null);        		
-        	}
-        	*/
-        }
-    }
-    
-    @Override
-    protected Dialog onCreateDialog(int id) {
-    	
-    	Dialog dialog = null;
-    	AlertDialog.Builder builder = new AlertDialog.Builder(this);
-    	
-        switch (id) {
-        case DIALOG_DATE:
-        	dialog = new DatePickerDialog(this, mDateSetListener,
-                        mDateChosen.getYear(), mDateChosen.getMonth() - 1, mDateChosen.getDay());
-        	break;
-        	
-        case DIALOG_ERROR:
-        	builder = new AlertDialog.Builder(this);
-        	builder.setMessage("error message")
-	       		.setCancelable(false)
-	       		.setPositiveButton("OK", null);
-        	dialog = builder.create();     
-        	break;    
-        	
-        case DIALOG_MEMENTO_YEARS:
-        	builder = new AlertDialog.Builder(this);
-        	final CharSequence[] years = mMementos.getAllYears();
-        	
-        	// Select the year of the Memento currently displayed
-        	int selectedYear = -1;
-        	
-        	for (int i = 0; i < years.length; i++) {
-        		if (mDateDisplayed.getYear() == Integer.parseInt(years[i].toString())) {
-        			selectedYear = i;
-        			break;
-        		}
-        	}
-        		
-        	builder.setSingleChoiceItems(years, selectedYear, new DialogInterface.OnClickListener() {
-        	    public void onClick(DialogInterface dialog, int item) {
-        	    	dialog.dismiss();
-        	    	
-        	    	mSelectedYear = Integer.parseInt(years[item].toString());
-        	    	showDialog(DIALOG_MEMENTO_DATES);
-        	    }
-        	});
-        	
-        	dialog = builder.create(); 
-        	
-        	// Cause the dialog to be freed whenever it is dismissed.
-        	// This is necessary because the items are dynamic.  
-        	dialog.setOnDismissListener(new OnDismissListener() {
-				@Override
-				public void onDismiss(DialogInterface arg0) {
-        	    	removeDialog(DIALOG_MEMENTO_YEARS);					
-				}        		
-        	});
-        	
-        	break;
-        	
-        case DIALOG_MEMENTO_DATES:        	
-        	builder = new AlertDialog.Builder(this);
-        	
-        	final CharSequence[] dates;
-        	
-        	if (mSelectedYear == 0)
-        		dates = mMementos.getAllDates();
-        	else
-        		dates = mMementos.getDatesForYear(mSelectedYear);
-        	
-        	Log.d(LOG_TAG, "Number of dates = " + dates.length);
-        	
-        	// This shouldn't happen, but just in case.
-        	if (dates.length == 0) {
-        		showToast("No Mementos to select from.");
-        		return null;
-        	}
-        	
-        	int selected = -1;
-        	
-        	// Select the radio button for the current Memento if it's in the selected year.
-        	if (mSelectedYear == 0 || mSelectedYear == mDateDisplayed.getYear()) {
-        		
-        		int index = mMementos.getIndex(mDateDisplayed);
-        		if (index < 0) 
-        			Log.d(LOG_TAG, "Could not find Memento in the list with date " + mDateDisplayed);
-        		else 
-        			mMementos.setCurrentIndex(index);
-        		
-        		Memento m = mMementos.getCurrent();
-        		if (m != null) {
-        			for (int i = 0; i < dates.length; i++) {
-        				if (m.getDateTime().dateAndTimeFormatted().equals(dates[i])) {	
-        					selected = i;
-	        				break;
-	        			}
-	        		}
-        		}
-        		else
-        			Log.d(LOG_TAG, "There is no current Memento");
-        	}
-        	
-        	Log.d(LOG_TAG, "Selected index = " + selected);
-        	        	
-        	builder.setSingleChoiceItems(dates, selected, new DialogInterface.OnClickListener() {
-        	    public void onClick(DialogInterface dialog, int item) {
-        	    	dialog.dismiss();
-        	    	        	
-        	    	int index = mMementos.getIndex(dates[item].toString());
-        	    	Memento m = mMementos.get(index);
-        	    	if (m == null) {
-            			Log.e(LOG_TAG, "Could not find Memento with date " + mDateChosen + ".");
-            			displayError("The date selected could not be accessed. Please select another.");
-        	    	}
-        	    	else {
-	        	    	// Display this Memento
-        	    		
-        	    		Log.d(LOG_TAG, "index for [" + dates[item] + "] is " + index);
-        	    		        	    		
-	                	SimpleDateTime d = m.getDateTime();
-	                	setChosenDate(d);
-	                	
-	                	if (index == mMementos.getCurrentIndex()) {
-	                		showToast("Memento is already displayed.");
-	                	}
-	                	else {
-	                		mMementos.setCurrentIndex(index);
-	                		showToast("Time travelling to " + mDateChosen.dateFormatted());
-	                	   	
-	                	   	// Find the Memento URL for the selected date                		
-	                		
-    	            	   	mDateDisplayed = new SimpleDateTime(mDateChosen);
-    						String redirectUrl = m.getUrl();
-    						Log.d(LOG_TAG, "Sending browser to " + redirectUrl);
-    						mWebview.loadUrl(redirectUrl);
-    						
-    						setEnableForNextPrevButtons();	                    	
-	                	}
-        	    	}  	           	    	
-        	    }
-        	});
-        	
-        	dialog = builder.create();   
-        	
-        	// Cause the dialog to be freed whenever it is dismissed.
-        	// This is necessary because the items are dynamic.  I couldn't find
-        	// a better way to solve this problem.
-        	dialog.setOnDismissListener(new OnDismissListener() {
-				@Override
-				public void onDismiss(DialogInterface arg0) {
-        	    	removeDialog(DIALOG_MEMENTO_DATES);					
-				}        		
-        	});
-        	
-        	break;
-        	
-        case DIALOG_HELP:        	
-        	  
-        	Context context = getApplicationContext();            	
-        	LayoutInflater inflater = (LayoutInflater) context.getSystemService(LAYOUT_INFLATER_SERVICE);
-        	View layout = inflater.inflate(R.layout.about_dialog, null);         	
-			builder.setView(layout);
-			builder.setPositiveButton("OK", null);	
-			dialog = builder.create(); 
-        	break;
-        }
-        	
-        return dialog;
-    }
-    
-    @Override
-    protected void onPrepareDialog(int id, Dialog dialog) {
-        super.onPrepareDialog(id, dialog);
-
-        switch (id) {
-        case DIALOG_DATE:        	
-        	// To fix a bug described here: http://www.zunisoft.com/?p=1140 
-        	DatePickerDialog dlg = (DatePickerDialog) dialog;        
-        	DateFormat longDateFormat = new SimpleDateFormat("EEEE, MMMM d, yyyy");
-        	dlg.setTitle(longDateFormat.format(mDateChosen.getDate()));        	
-        	dlg.updateDate(mDateChosen.getYear(), mDateChosen.getMonth() - 1, 
-        			mDateChosen.getDay());
-        	break;
-        case DIALOG_ERROR:        		
-    		AlertDialog ad = (AlertDialog) dialog;
-    		ad.setMessage(mErrorMessage);
-    		mErrorMessage = null;
-            break;            
-        }
-    }
-    
-    @Override
-    public boolean onKeyDown(int keyCode, KeyEvent event) {
-        if ((keyCode == KeyEvent.KEYCODE_BACK) && mWebview.canGoBack()) {
-        	
-        	// Get the previous URL to update our internal copy 
-        	
-        	WebBackForwardList list = mWebview.copyBackForwardList();
-        	int curr = list.getCurrentIndex();
-        	WebHistoryItem item = list.getItemAtIndex(curr - 1);
-        	Bitmap favicon = item.getFavicon();
-        	
-        	if (favicon == null)
-        		Log.d(LOG_TAG, "No favicon in WebHistoryItem - null");
-        	else
-        		Log.d(LOG_TAG, "WebHistoryItem favicon W = " + favicon.getWidth());
-        	
-        	mOriginalUrl = item.getUrl();
-        	Log.d(LOG_TAG, "GO BACK TO " + mOriginalUrl); 
-        	
-            mWebview.goBack();
-            return true;
-        }
-        return super.onKeyDown(keyCode, event);
-    }
-            
-    
-    /**
      * Retrieve the TimeMap from the Web and parse out the Mementos.
      * Currently this only recognizes TimeMaps using CSV formats. 
      * Other formats to be implemented: RDF/XML, N3, and HTML.
@@ -1432,26 +417,26 @@ public class MementoBrowser extends Activity {
      */
     private boolean accessTimeMap() {    	   	
         
-    	HttpClient httpclient = new DefaultHttpClient();
+    	HttpClient httpclient = getHttpClient();
     	
     	String url = mTimeMap.getUrl();
         HttpGet httpget = new HttpGet(url);
         httpget.setHeader("User-Agent", mUserAgent);
                 
-        Log.d(LOG_TAG, "Accessing TimeMap: " + httpget.getURI());
+        log.debug("Accessing TimeMap: " + httpget.getURI());
 
         HttpResponse response = null;
 		try {			
 			response = httpclient.execute(httpget);
 			
-			Log.d(LOG_TAG, "Response code = " + response.getStatusLine());
+			log.debug("Response code = " + response.getStatusLine());
 			
-			//Log.d(LOG_TAG, getHeadersAsString(response.getAllHeaders()));
+			//log.debug(getHeadersAsString(response.getAllHeaders()));
 		} catch (ClientProtocolException e) {
-			Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+			log.error(getExceptionStackTraceAsString(e));
 			return false;
 		} catch (IOException e) {
-			Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+			log.error(getExceptionStackTraceAsString(e));
 			return false;
 		}                
         
@@ -1463,9 +448,9 @@ public class MementoBrowser extends Activity {
 			// See if MIME type is the same as Type		
 			Header type = response.getFirstHeader("Content-Type");
 			if (type == null)
-				Log.w(LOG_TAG, "Could not find the Content-Type for " + url);
+				log.warn("Could not find the Content-Type for " + url);
 			else if (!type.getValue().contains(mTimeMap.getType()))
-				Log.w(LOG_TAG, "Content-Type is [" + type.getValue() + "] but TimeMap type is [" +
+				log.warn("Content-Type is [" + type.getValue() + "] but TimeMap type is [" +
 						mTimeMap.getType() + "] for " + url);
 			
 			// Timemap MUST be "application/link-format", but leave csv for
@@ -1476,20 +461,20 @@ public class MementoBrowser extends Activity {
 					String responseBody = EntityUtils.toString(response.getEntity());
 					parseCsvLinks(responseBody);
 				} catch (ParseException e) {
-					Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+					log.error(getExceptionStackTraceAsString(e));
 					return false;
 				} catch (IOException e) {
-					Log.e(LOG_TAG, getExceptionStackTraceAsString(e));
+					log.error(getExceptionStackTraceAsString(e));
 					return false;
 				}
 			}
 			else {
-				Log.e(LOG_TAG, "Unable to handle TimeMap type " + mTimeMap.getType());
+				log.error("Unable to handle TimeMap type " + mTimeMap.getType());
 				return false;
 			}
 		}		
 		else {
-			Log.d(LOG_TAG, "Unexpected response code in accessTimeMap = " + statusCode);
+			log.debug("Unexpected response code in accessTimeMap = " + statusCode);
 			return false;
 		}        
         
@@ -1531,8 +516,6 @@ public class MementoBrowser extends Activity {
     	System.out.println("compareTo = " + comp);
     	
     	date = new SimpleDateTime(31, 12, 2010);
-    	date.setDateFormat(android.text.format.DateFormat.getDateFormat(getApplicationContext()));
-    	date.setTimeFormat(android.text.format.DateFormat.getTimeFormat(getApplicationContext()));
     	System.out.println("date formatted = " + date.dateFormatted());
     	System.out.println("date and time formatted = " + date.dateAndTimeFormatted());
     	System.out.println("long formatted = " + date.longDateFormatted());
@@ -1607,5 +590,31 @@ public class MementoBrowser extends Activity {
     	//System.out.println("Date returned from getResourceDatetimeForWebcite: " + date.toString());
     	
     	//accessTimeMap();
-    }   
+    }
+    
+    public void setTargetURI( String target ) {
+    	this.makeHttpRequests( target );
+    }
+    
+    public MementoList getMementos() {
+    	return this.mMementos;
+    }
+    
+    /**
+     * Command-line utility to take a URL and look up who holds archived copies (Mementos)
+     * @param args
+     * @throws URISyntaxException 
+     */
+    public static void main( String[] args ) throws URISyntaxException {
+    	String query = "http://www.bl.uk";
+    	if( args.length > 0 ) {
+    		query = args[0];
+    	}
+    	// Query:
+    	MementoClient mc = new MementoClient();
+    	mc.setTargetURI(query);
+    	// Get results:
+    	mc.getMementos().displayAll();
+    	
+    }
 }
