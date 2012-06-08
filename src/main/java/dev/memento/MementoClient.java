@@ -92,9 +92,11 @@ public class MementoClient {
      */
     private HttpClient getHttpClient() {
     	HttpClient httpclient = new DefaultHttpClient();
-    	HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
-    			Integer.parseInt(System.getProperty("http.proxyPort")), "http");
-    	httpclient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    	if( System.getProperty("http.proxyHost") != null ) {
+    		HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
+    				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
+    		httpclient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    	}
     	return httpclient;
     }
     
