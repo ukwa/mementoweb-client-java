@@ -56,10 +56,10 @@ public class MementoClient {
     static final int DIALOG_MEMENTO_YEARS = 3;
     static final int DIALOG_HELP = 4;
     
-	private String mDefaultTimegateUri;
 	private String[] mTimegateUris = { "http://mementoproxy.lanl.gov/aggr/timegate/" , "http://mementoproxy.lanl.gov/google/timegate/" };
+	private String mDefaultTimegateUri = mTimegateUris[0];
 	
-    private SimpleDateTime mDateChosen;
+    private SimpleDateTime mDateChosen = new SimpleDateTime();
         
     private TimeBundle mTimeBundle;
     private TimeMap mTimeMap;
@@ -296,7 +296,7 @@ public class MementoClient {
      * @return The datetime of the last item marked rel="memento"
      */
     private SimpleDateTime parseCsvLinks(String links) {
-    	mMementos.clear();    	
+    	if (mMementos != null ) mMementos.clear();
     	mFirstMemento = null;
     	mLastMemento = null;
     	
@@ -364,9 +364,7 @@ public class MementoClient {
     	
 		log.debug("Finished parsing, found " + tempList.size() + " links");
 		
-		synchronized (mMementos) {
-			mMementos = tempList;
-		}
+		mMementos = tempList;
 				
 		if (date != null)
 			log.debug("parseCsvLinks returning " + date.toString());
@@ -610,6 +608,7 @@ public class MementoClient {
     	if( args.length > 0 ) {
     		query = args[0];
     	}
+    	System.out.println("Looking for: "+query);
     	// Query:
     	MementoClient mc = new MementoClient();
     	mc.setTargetURI(query);
