@@ -373,19 +373,6 @@ public class MementoClient {
 			}
 		}
     	
-    	// In some cases, e.g. http://en.wikipedia.org/wiki/Wikipedia:Wikipedia_is_an_encyclopedia or most other Wikipedia links, the TimeGate returns no link to the TimeMap.
-    	// If no TimeMap was declared, guess it:
-    	if( mTimeMap == null ) {
-    		// <http://mementoproxy.lanl.gov/aggr/timemap/link/http://en.wikipedia.org/>;rel="timemap";type="application/link-format"
-    		String newTimeMap = "<http://mementoproxy.lanl.gov/aggr/timemap/link/"+initUri+">;rel=\"timemap\";type=\"application/link-format\"";
-    		mTimeMap = new TimeMap( new Link(newTimeMap));
-    	}
-    	    	
-    	// Sorting can take a time.  Since the Lanl proxy already sorts them, let's
-    	// comment this out for now.
-    	//log.debug("Starting sort...");
-		//Collections.sort(tempList);
-    	
 		log.debug("Finished parsing, found " + tempList.size() + " links");
 		
 		mMementos = tempList;
