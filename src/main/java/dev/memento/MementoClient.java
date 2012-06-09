@@ -69,13 +69,13 @@ public class MementoClient {
     
     private final int MAX_NUM_MEMENTOS_IN_LIST = 20;
     
+    private CharSequence mErrorMessage;
+
     // Used when selecting a memento
     int mSelectedYear = 0;
 
     // Used in http requests
     public String mUserAgent;
-
-    private CharSequence mErrorMessage;
 
 	private SimpleDateTime mDateDisplayed;
    	
@@ -105,6 +105,8 @@ public class MementoClient {
      * of Mementos. 
      */
     private void makeHttpRequests(String initUrl) {
+    	
+        CharSequence mErrorMessage = null;
     	
     	// Contact Memento proxy with chosen Accept-Datetime:
     	// http://mementoproxy.lanl.gov/aggr/timegate/http://example.com/
@@ -214,12 +216,12 @@ public class MementoClient {
 			    	
 			    	// Get the datetime of this mememnto which should be supplied in the
 			    	// Link: headers
-			    	mDateDisplayed = parseCsvLinks(linkValue);
+			    	mDateDisplayed = parseCsvLinks(initUrl, linkValue);
 					
 					// Now that we know the date, update the UI to reflect it
 			    	
 					if (mTimeMap != null)
-						if (!accessTimeMap())
+						if (!accessTimeMap(initUrl))
 							mErrorMessage = "There were problems accessing the Memento's TimeMap.";
 				}
 			}
@@ -248,10 +250,10 @@ public class MementoClient {
 				mTimeMap = null;
 		    	mTimeBundle = null;
 		    	
-				parseCsvLinks(linkValue);		
+				parseCsvLinks(initUrl,linkValue);		
 		    	
 				if (mTimeMap != null)
-					accessTimeMap();
+					accessTimeMap(initUrl);
 				
 				if (mFirstMemento == null || mLastMemento == null) {
 					log.error("Could not find first or last Memento in 406 response for " + url);
@@ -274,7 +276,12 @@ public class MementoClient {
 			mErrorMessage = "Sorry, but there was an unexpected error that will " +
 				"prevent the Memento from being displayed. Try again in 5 minutes.";
 			log.error("Unexpected response code in makeHttpRequests = " + statusCode);
-		}               
+		}
+		
+		// Report error message as a log message:
+		log.error(mErrorMessage);
+		this.mErrorMessage = mErrorMessage;
+		
     }
     
     
@@ -297,10 +304,18 @@ public class MementoClient {
      * @param links
      * @return The datetime of the last item marked rel="memento"
      */
-    private SimpleDateTime parseCsvLinks(String links) {
+    private SimpleDateTime parseCsvLinks(String initUri, String links) {
+    	if( log.isDebugEnabled() ) {
+    		if( links.length() > 200 ) {
+        		log.debug("Parsing: "+links.substring(0,200));
+    		} else {
+        		log.debug("Parsing: "+links);
+    		}
+    	}
     	if (mMementos != null ) mMementos.clear();
     	mFirstMemento = null;
     	mLastMemento = null;
+    	mTimeMap = null;
     	
     	SimpleDateTime date = null;
     	
@@ -358,6 +373,13 @@ public class MementoClient {
 			}
 		}
     	
+    	// In some cases, e.g. http://en.wikipedia.org/wiki/Wikipedia:Wikipedia_is_an_encyclopedia or most other Wikipedia links, the TimeGate returns no link to the TimeMap.
+    	// If no TimeMap was declared, guess it:
+    	if( mTimeMap == null ) {
+    		// <http://mementoproxy.lanl.gov/aggr/timemap/link/http://en.wikipedia.org/>;rel="timemap";type="application/link-format"
+    		String newTimeMap = "<http://mementoproxy.lanl.gov/aggr/timemap/link/"+initUri+">;rel=\"timemap\";type=\"application/link-format\"";
+    		mTimeMap = new TimeMap( new Link(newTimeMap));
+    	}
     	    	
     	// Sorting can take a time.  Since the Lanl proxy already sorts them, let's
     	// comment this out for now.
@@ -415,7 +437,7 @@ public class MementoClient {
      * Other formats to be implemented: RDF/XML, N3, and HTML.
      * @return true if TimeMap was successfully retreived, false otherwise.
      */
-    private boolean accessTimeMap() {    	   	
+    private boolean accessTimeMap( String initUrl ) {    	   	
         
     	HttpClient httpclient = getHttpClient();
     	
@@ -459,7 +481,7 @@ public class MementoClient {
 				mTimeMap.getType().equals("application/link-format")) {
 				try {
 					String responseBody = EntityUtils.toString(response.getEntity());
-					parseCsvLinks(responseBody);
+					parseCsvLinks(initUrl,responseBody);
 				} catch (ParseException e) {
 					log.error(getExceptionStackTraceAsString(e));
 					return false;
@@ -562,7 +584,7 @@ public class MementoClient {
     		"<http://web.archive.org/web/20010910203350/www.harding.edu/fmccown/>;rel=\"memento\";datetime=\"Mon, 10 Sep 2001 20:33:50 GMT\"," + 
     		"<http://webcache.googleusercontent.com/search?q=cache:http://www.digitalpreservation.gov/>;rel=\"first last memento\";datetime=\"Tue, 07 Sep 2010 11:54:29 GMT\"";
     	
-    	parseCsvLinks(links);
+    	parseCsvLinks(url,links);
     	mMementos.displayAll();
     	
     	System.exit(0);
@@ -598,6 +620,14 @@ public class MementoClient {
     
     public MementoList getMementos() {
     	return this.mMementos;
+    }
+    
+    /**
+     * @return null if all is well.
+     */
+    public String getErrorMessage() {
+    	if( this.mErrorMessage == null ) return null;
+    	return this.mErrorMessage.toString();
     }
     
     /**
