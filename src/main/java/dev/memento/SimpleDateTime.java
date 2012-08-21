@@ -31,7 +31,10 @@ import java.util.Locale;
 import java.util.SimpleTimeZone;
 import java.util.TimeZone;
 
+import org.apache.log4j.Logger;
+
 public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable {
+	Logger log = Logger.getLogger(SimpleDateTime.class.getCanonicalName());
 	
 	private static final long serialVersionUID = 1L;
 
@@ -205,7 +208,7 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
         //       .append(mMonth).append("-").append(mDay).append("-").append(mYear);
 		
 		if (mDateFormat == null) {
-			System.out.println("!! mDateFormat is null - using default format !!");
+			log.warn("mDateFormat is null! Using default format.");
 			
 			// Use default format
 			mDateFormat = DateFormat.getInstance();

@@ -279,9 +279,10 @@ public class MementoClient {
 		}
 		
 		// Report error message as a log message:
-		log.error(mErrorMessage);
-		this.mErrorMessage = mErrorMessage;
-		
+		if( mErrorMessage != null ) {
+			log.error(mErrorMessage);
+			this.mErrorMessage = mErrorMessage;
+		}
     }
     
     
@@ -408,7 +409,7 @@ public class MementoClient {
 		// Now create matcher object.
 		Matcher m = r.matcher(iaUrl);
 		if (m.find()) {
-			System.out.println("Found value: " + m.group(0));
+			log.info("Found value: " + m.group(0));
 			url = m.replaceFirst("");
 		}
 		
