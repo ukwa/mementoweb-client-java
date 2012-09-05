@@ -275,6 +275,7 @@ public class MementoClient {
 		else {
 			mErrorMessage = "Sorry, but there was an unexpected error that will " +
 				"prevent the Memento from being displayed. Try again in 5 minutes.";
+			log.error("While GETting URL: "+url);
 			log.error("Unexpected response code in makeHttpRequests = " + statusCode);
 		}
 		
@@ -340,6 +341,7 @@ public class MementoClient {
 			
 			Link link = new Link(linkStr);
 			String rel = link.getRel();
+			if (rel == null) continue;
 			if (rel.contains("memento")) {
 				Memento m = new Memento(link);
 				tempList.add(m);
