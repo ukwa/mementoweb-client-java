@@ -57,7 +57,8 @@ public class MementoClient {
     static final int DIALOG_HELP = 4;
     
 	private String[] mTimegateUris = { "http://mementoproxy.lanl.gov/aggr/timegate/" , "http://mementoproxy.lanl.gov/google/timegate/" };
-	private String mDefaultTimegateUri = mTimegateUris[0];
+	// Let the TimeGate URI default to LANL Aggregator:
+	private String mTimegateUri = mTimegateUris[0];
 	
     private SimpleDateTime mDateChosen = new SimpleDateTime();
         
@@ -117,7 +118,7 @@ public class MementoClient {
     	// Disable automatic redirect handling so we can process the 302 ourself 
     	httpclient.getParams().setParameter(ClientPNames.HANDLE_REDIRECTS, false);
  
-    	String url = mDefaultTimegateUri + initUrl;
+    	String url = mTimegateUri + initUrl;
         HttpGet httpget = new HttpGet(url);
         
         // Change the request date to 23:00:00 if this is the first memento.
@@ -326,16 +327,16 @@ public class MementoClient {
     	MementoList tempList = new MementoList();
     	
     	log.debug("Start parsing links");
-		String[] linkStrings = links.split("\",");
+		String[] linkStrings = links.split("\"\\s*,");
 				
     	// Place all Links into the array and then sort it based on date
     	for (String linkStr : linkStrings) {
 			    		
+			log.debug("LinkStr:" + linkStr);
+			
 			// Add back "
 			if (!linkStr.endsWith("\""))
 				linkStr += "\"";
-			
-			//log.debug(linkStr);	
 			
 			linkStr = linkStr.trim();
 			
@@ -619,7 +620,21 @@ public class MementoClient {
     	if( this.mErrorMessage == null ) return null;
     	return this.mErrorMessage.toString();
     }
-    
+
+	/**
+	 * @return the mTimegateUri
+	 */
+	public String getTimegateUri() {
+		return mTimegateUri;
+	}
+
+	/**
+	 * @param mTimegateUri the mTimegateUri to set
+	 */
+	public void setTimegateUri(String mTimegateUri) {
+		this.mTimegateUri = mTimegateUri;
+	}
+	
     /**
      * Command-line utility to take a URL and look up who holds archived copies (Mementos)
      * @param args
@@ -633,9 +648,11 @@ public class MementoClient {
     	System.out.println("Looking for: "+query);
     	// Query:
     	MementoClient mc = new MementoClient();
+    	mc.setTimegateUri("http://www.webarchive.org.uk/wayback/memento/timegate/");
     	mc.setTargetURI(query);
     	// Get results:
     	mc.getMementos().displayAll();
     	
     }
+    
 }
