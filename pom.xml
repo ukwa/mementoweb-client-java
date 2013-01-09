@@ -1,9 +1,46 @@
 <project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <parent>
+      <groupId>org.sonatype.oss</groupId>
+      <artifactId>oss-parent</artifactId>
+      <version>7</version>
+    </parent>
   <modelVersion>4.0.0</modelVersion>
   <groupId>uk.bl.wap.memento</groupId>
   <artifactId>mementoweb-java-client</artifactId>
   <version>1.1.2-SNAPSHOT</version>
-	<build>
+   <organization>
+      <name>The British Library</name>
+   </organization>
+   <inceptionYear>2012</inceptionYear>
+   <licenses>
+      <license>
+         <name>The Apache Software License, Version 2.0</name>
+         <url>http://www.apache.org/licenses/LICENSE-2.0.txt</url>
+         <distribution>repo</distribution>
+      </license>
+   </licenses>
+   <developers>
+      <developer>
+         <id>anjackson</id>
+         <name>Andrew Jackson</name>
+         <email>Andrew.Jackson@bl.uk</email>
+      </developer>
+   </developers>
+   <issueManagement>
+      <system>GitHub Issues</system>
+      <url>https://github.com/ukwa/mementoweb-client-java/issues</url>
+   </issueManagement>
+   <scm>
+      <connection>scm:git:git@github.com:ukwa/mementoweb-client-java.git</connection>
+      <developerConnection>scm:git:git@github.com:ukwa/mementoweb-client-java.git</developerConnection>
+      <url>git@github.com:ukwa/mementoweb-client-java.git</url>
+   </scm>
+   <properties>
+      <jdk.version>1.6</jdk.version>
+      <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+      <license.licenseName>apache_v2</license.licenseName>
+   </properties>
+ 	<build>
 		<plugins>
 			<plugin>
 				<groupId>org.apache.maven.plugins</groupId>
@@ -14,6 +51,19 @@
 					<target>1.6</target>
 				</configuration>
 			</plugin>
+<plugin>
+    <groupId>org.codehaus.mojo</groupId>
+    <artifactId>license-maven-plugin</artifactId>
+    <executions>
+        <execution>
+            <id>first</id>
+            <goals>
+                <goal>update-file-header</goal>
+            </goals>
+            <phase>process-sources</phase>
+        </execution>
+    </executions>
+</plugin>
 		</plugins>
 	</build>
 	<dependencies>
