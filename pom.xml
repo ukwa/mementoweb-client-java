@@ -5,8 +5,8 @@
       <version>7</version>
    </parent>
    <modelVersion>4.0.0</modelVersion>
-   <groupId>uk.bl.wap.memento</groupId>
-   <artifactId>mementoweb-java-client</artifactId>
+   <groupId>uk.bl.wa.memento</groupId>
+   <artifactId>mementoweb-client-java</artifactId>
    <name>MementoWeb Java Client Stubs</name>
    <version>1.1.3-SNAPSHOT</version>
    <organization>
