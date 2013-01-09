@@ -34,17 +34,17 @@ public class MementoBrowserTest {
      	"<http://mementoproxy.lanl.gov/google/timemap/link/http://www.digitalpreservation.gov/>;rel=\"timemap\";type=\"text/csv\"," +
      	"<http://webcache.googleusercontent.com/search?q=cache:http://www.digitalpreservation.gov/>;rel=\"first-memento last-memento memento\";datetime=\"Tue, 07 Sep 2010 11:54:29 GMT\"";
 	
-	@Test
+	//@Test
 	public void testFetchUrl() {
 		fail("Not yet implemented");
 	}
 
-	@Test
+	//@Test
 	public void testMakeMementoRequests() {
 		fail("Not yet implemented");
 	}
 
-	@Test
+	//@Test
 	public void testParseCsvLinks() {
 
 		fail("Not yet implemented");
