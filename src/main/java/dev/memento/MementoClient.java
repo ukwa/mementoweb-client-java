@@ -76,7 +76,10 @@ public class MementoClient {
     static final int DIALOG_MEMENTO_YEARS = 3;
     static final int DIALOG_HELP = 4;
     
-	private String[] mTimegateUris = { "http://mementoproxy.lanl.gov/aggr/timegate/" , "http://mementoproxy.lanl.gov/google/timegate/" };
+	private String[] mTimegateUris = { 
+			"http://mementoproxy.lanl.gov/aggr/timegate/" , 
+			"http://mementoproxy.lanl.gov/google/timegate/"
+			};
 	// Let the TimeGate URI default to LANL Aggregator:
 	private String mTimegateUri = mTimegateUris[0];
 	
