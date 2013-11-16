@@ -23,7 +23,7 @@ package dev.memento;
 
 /*
  * #%L
- * mementoweb-java-client
+ * MementoWeb Java Client Stubs
  * %%
  * Copyright (C) 2012 - 2013 The British Library
  * %%
@@ -44,6 +44,7 @@ package dev.memento;
 
 import java.io.Serializable;
 import java.text.DateFormat;
+import java.text.DateFormatSymbols;
 import java.text.ParseException;
 import java.text.SimpleDateFormat;
 import java.util.Calendar;
@@ -52,13 +53,10 @@ import java.util.Locale;
 import java.util.SimpleTimeZone;
 import java.util.TimeZone;
 
-import org.apache.log4j.Logger;
-
 public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable {
-	Logger log = Logger.getLogger(SimpleDateTime.class.getCanonicalName());
 	
 	private static final long serialVersionUID = 1L;
-
+	
 	// Sun, 06 Nov 1994 08:49:37 GMT
 	public final static String PATTERN_RFC1123 = "EEE, dd MMM yyyy HH:mm:ss zzz";
 	
@@ -114,6 +112,12 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 	//	setDateRfc1123(date);
 	//}
 	
+	/**
+	 * Create a SimpleDateTime with given parameters.
+	 * @param day Between 1 and 31
+	 * @param month Between 1 and 12
+	 * @param year Any value
+	 */
 	public SimpleDateTime(int day, int month, int year) {		
 		setDate(day, month, year);		
 	}
@@ -151,7 +155,7 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 		SimpleDateFormat formatter = new SimpleDateFormat(PATTERN_AMERICAN_SHORT, Locale.US);
         //formatter.setTimeZone(GMT);            
         try {
-        	//Log.d(LOG_TAG, "date is [" + date + "]");
+        	//if (Log.LOG) Log.d(LOG_TAG, "date is [" + date + "]");
         	Date d = (Date)formatter.parse(date);				
 			
 			Calendar cal = Calendar.getInstance();
@@ -180,6 +184,10 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 	public int getMonth() {
 		return mMonth;
 	}
+	
+	public String getMonthName() {
+		return new DateFormatSymbols().getMonths()[mMonth-1];
+	}
 
 	public void setMonth(int month) {
 		setDate(mDay, month, mYear);
@@ -204,7 +212,7 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 		SimpleDateFormat formatter = new SimpleDateFormat(PATTERN_RFC1123, Locale.US);
         //formatter.setTimeZone(GMT);            
         try {
-        	//Log.d(LOG_TAG, "date is [" + date + "]");
+        	//if (Log.LOG) Log.d(LOG_TAG, "date is [" + date + "]");
         	mDate = formatter.parse(date);				
 			
 			Calendar cal = Calendar.getInstance();
@@ -213,7 +221,7 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 			mMonth = cal.get(Calendar.MONTH) + 1;
 			mYear = cal.get(Calendar.YEAR);
 			
-			//Log.d(LOG_TAG, "date is " + toString());
+			//if (Log.LOG) Log.d(LOG_TAG, "date is " + toString());
 			
 		} catch (ParseException e) {
 			e.printStackTrace();
@@ -221,7 +229,7 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 	}
 	
 	/**
-	 * Return the date in dd-mm-yyyy format (e.g., 12-31-2001).
+	 * Return the date in the given local format.
 	 * @return
 	 */
 	public CharSequence dateFormatted() {    	
@@ -229,20 +237,21 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
         //       .append(mMonth).append("-").append(mDay).append("-").append(mYear);
 		
 		if (mDateFormat == null) {
-			log.warn("mDateFormat is null! Using default format.");
+			//System.out.println("!! mDateFormat is null - using default format !!");
 			
 			// Use default format
 			mDateFormat = DateFormat.getInstance();
 		}
-		//	mDateFormat = DateFormat.getDateInstance();
+		
+		//if (Log.LOG) Log.d(LOG_TAG, "*** " + this.mYear + "-" + this.mMonth + "-" + this.mDay);
 		
 		return mDateFormat.format(mDate);
     } 
 	
 	public CharSequence dateAndTimeFormatted() {
 		
-		//if (mTimeFormat == null)
-		//	mTimeFormat = DateFormat.getDateInstance();
+		if (mTimeFormat == null)
+			mTimeFormat = DateFormat.getDateInstance();
 		
 		return dateFormatted() + " " + mTimeFormat.format(mDate);
 	}
@@ -278,14 +287,38 @@ public class SimpleDateTime implements Comparable<SimpleDateTime>, Serializable 
 	
 	@Override
 	public String toString() {
-		return dateFormatted().toString();
+		return mYear + "-" + mMonth + "-" + mDay;
 	}
 
 	/**
 	 * Compare only the date, not the hour, minutes, and seconds.
 	 */
+	/*
 	@Override
 	public int compareTo(SimpleDateTime date) {
+		// Compare with our equalsDate() which only compares dates, not times
+		if (date.equalsDate(this))
+			return 0;
+		else {
+			// Since the dates aren't the same, we can use the regular compareTo()
+			// which does compare time info
+			return mDate.compareTo(date.mDate);
+		}
+	}*/
+	
+	@Override
+	public int compareTo(SimpleDateTime date) {
+		return mDate.compareTo(date.mDate);		
+	}
+	
+	/**
+	 * Compares two SimpleDateTime objects based on date only (no hours,
+	 * min, sec, etc.).
+	 * @param date
+	 * @return an int < 0 if this date is less than the specified date, 
+	 * 0 if they are equal, and an int > 0 if this date is greater
+	 */
+	public int compareDateTo(SimpleDateTime date) {
 		// Compare with our equalsDate() which only compares dates, not times
 		if (date.equalsDate(this))
 			return 0;

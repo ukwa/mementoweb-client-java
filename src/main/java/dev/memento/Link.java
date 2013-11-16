@@ -66,12 +66,19 @@ public class Link {
 		for (String part : parts) {
 			part = part.trim();
 			
+			// Get rid of potential spaces before and after equal sign
+			part = part.replaceFirst("^(\\w+)\\s*=\\s*", "$1=");
+			
 			if (part.startsWith("rel="))
 				parseRel(part);
 			else if (part.startsWith("datetime="))
 				parseDatetime(part);
 			else if (part.startsWith("type="))
 				parseType(part);
+			else if (part.startsWith("from="))
+				parseFromDate(part);
+			else if (part.startsWith("until="))
+				parseUntilDate(part);
 			else {
 				log.error("Unexpected value: [" + part + "] when looking for rel, datetime, or type");
 				return;
@@ -93,6 +100,14 @@ public class Link {
 		}
 	}
 	
+	private void parseFromDate(String date) {
+		// TODO: Parse "from" date for TimeMap
+	}
+	
+	private void parseUntilDate(String date) {
+		// TODO: Parse "until" date for TimeMap
+	}
+	
 	private void parseRel(String rel) {
 				
 		// Get rid of rel= at the beginning and quotes
@@ -107,6 +122,8 @@ public class Link {
 			mRel = "timegate";
 		else if (rel.contains("original"))
 			mRel = "original";
+		else if (rel.contains("self"))   // Used only on timemaps 
+			mRel = "self";     
 		else if (rel.contains("memento")) {		
 			// Could contain "first memento", "last memento", "prev memento", "next memento", 
 			// or "memento" or any combination of these like "first last memento"
@@ -173,5 +190,11 @@ public class Link {
 
 	public void setDatetime(SimpleDateTime datetime) {
 		this.mDatetime = datetime;
+	}
+	
+	@Override
+	public String toString() {
+		return "Link [mUrl=" + mUrl + ", mRel=" + mRel + ", mType=" + mType
+				+ ", mDatetime=" + mDatetime + "]";
 	}
 }

@@ -2,7 +2,7 @@ package dev.memento;
 
 /*
  * #%L
- * mementoweb-java-client
+ * MementoWeb Java Client Stubs
  * %%
  * Copyright (C) 2012 - 2013 The British Library
  * %%
@@ -63,7 +63,11 @@ public class Memento implements Comparable<Memento>, Serializable{
 	}
 	
 	public void setDateTime(String datetime) {
-		this.mDatetime = new SimpleDateTime(datetime);
+		mDatetime = new SimpleDateTime(datetime);
+	}
+	
+	public CharSequence getDateAndTimeFormatted() {		
+		return mDatetime.dateAndTimeFormatted();
 	}
 	
 	public String getDateTimeSimple() {
@@ -80,4 +84,42 @@ public class Memento implements Comparable<Memento>, Serializable{
 	public int compareTo(Memento memento) {			
 		return mDatetime.compareTo(memento.mDatetime);
 	}    	
+	
+	@Override
+	public int hashCode() {
+		final int prime = 31;
+		int result = 1;
+		result = prime * result
+				+ ((mDatetime == null) ? 0 : mDatetime.hashCode());
+		result = prime * result + ((mRel == null) ? 0 : mRel.hashCode());
+		result = prime * result + ((mUrl == null) ? 0 : mUrl.hashCode());
+		return result;
+	}
+
+	@Override
+	public boolean equals(Object obj) {
+		if (this == obj)
+			return true;
+		if (obj == null)
+			return false;
+		if (getClass() != obj.getClass())
+			return false;
+		Memento other = (Memento) obj;
+		if (mDatetime == null) {
+			if (other.mDatetime != null)
+				return false;
+		} else if (!mDatetime.equals(other.mDatetime))
+			return false;
+		if (mRel == null) {
+			if (other.mRel != null)
+				return false;
+		} else if (!mRel.equals(other.mRel))
+			return false;
+		if (mUrl == null) {
+			if (other.mUrl != null)
+				return false;
+		} else if (!mUrl.equals(other.mUrl))
+			return false;
+		return true;
+	}
 }

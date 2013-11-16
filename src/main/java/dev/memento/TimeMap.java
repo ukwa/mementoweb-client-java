@@ -26,11 +26,13 @@ public class TimeMap {
 	private String mUrl;
 	private String mRel;
 	private String mType;
+	private boolean mDownloaded;
 	
 	public TimeMap(Link link) {
 		mUrl = link.getUrl();
 		mRel = link.getRel();
 		mType = link.getType();
+		mDownloaded = false;
 	}
 	
 	public String getUrl() {
@@ -57,9 +59,17 @@ public class TimeMap {
 		this.mType = type;
 	}
 	
+	public boolean isDownloaded() {
+		return mDownloaded;
+	}
+
+	public void setDownloaded(boolean downloaded) {
+		this.mDownloaded = downloaded;
+	}
+
 	@Override
 	public String toString() {
 		return "TimeMap: url=[" + mUrl + "] rel=[" + mRel + "]" + 
-			" type=[" + mType + "]";  
+			" type=[" + mType + "] downloaded=[" + mDownloaded + "]";  
 	}
 }

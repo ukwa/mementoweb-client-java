@@ -45,19 +45,21 @@ package dev.memento;
  * #L%
  */
 
-import java.io.IOException;
 import java.io.PrintWriter;
 import java.io.StringWriter;
-import java.net.URI;
 import java.net.URISyntaxException;
+import java.text.DateFormat;
+import java.util.Calendar;
+import java.util.Collections;
+import java.util.Date;
+import java.util.HashSet;
+import java.util.Locale;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
 import org.apache.http.HttpResponse;
-import org.apache.http.ParseException;
-import org.apache.http.client.ClientProtocolException;
 import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.ClientPNames;
@@ -68,7 +70,7 @@ import org.apache.log4j.Logger;
 
 
 public class MementoClient {
-	Logger log = Logger.getLogger(MementoClient.class.getCanonicalName());
+	static Logger log = Logger.getLogger(MementoClient.class.getCanonicalName());
 	
 	static final int DIALOG_DATE = 0;
     static final int DIALOG_ERROR = 1;
@@ -81,12 +83,12 @@ public class MementoClient {
 			"http://mementoproxy.lanl.gov/google/timegate/"
 			};
 	// Let the TimeGate URI default to LANL Aggregator:
-	private String mTimegateUri = mTimegateUris[0];
+	private String mDefaultTimegateUri = mTimegateUris[0];
 	
     private SimpleDateTime mDateChosen = new SimpleDateTime();
         
     private TimeBundle mTimeBundle;
-    private TimeMap mTimeMap;
+    private HashSet<TimeMap> mTimeMaps;
     private Memento mFirstMemento;
     private Memento mLastMemento;
     private MementoList mMementos;
@@ -101,13 +103,18 @@ public class MementoClient {
     // Used in http requests
     public String mUserAgent;
 
-	private SimpleDateTime mDateDisplayed;
-   	
-    private void returnToPresent() {
-    	
-    	SimpleDateTime mToday = new SimpleDateTime();
-    	log.info("Returning to the present.");
-    	mMementos.setCurrentIndex(-1);
+    /**
+     * 
+     */
+    public MementoClient() {
+        // Set the date and time format
+        SimpleDateTime.mDateFormat = DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.US);
+        SimpleDateTime.mTimeFormat = DateFormat.getTimeInstance(DateFormat.DEFAULT, Locale.US);        
+        
+        // Holds all the timemaps for the web page being viewed
+        mTimeMaps = new HashSet<TimeMap>();    	
+        mMementos = new MementoList();       
+        
     }
     
     /**
@@ -120,17 +127,22 @@ public class MementoClient {
     		HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
     				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
     		httpclient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    		log.debug("Proxying via "+proxy);
+    	} else {
+    		log.debug("No web proxy.");
     	}
     	return httpclient;
     }
-    
-    /**
-     * Make http requests using the Memento protocol to obtain a Memento or list
-     * of Mementos. 
+
+		
+	/**
+     * Make http requests to the Timegate at the proxy server to obtain a Memento 
+     * and its TimeMap.  This is done in a background thread so the UI is not locked up.
+     * If an error occurs, mErrorMessage is set to an error message which is shown
+     * to the user.
+     * @param initUrl The URL whose Memento is to be discovered
      */
     private void makeHttpRequests(String initUrl) {
-    	
-        CharSequence mErrorMessage = null;
     	
     	// Contact Memento proxy with chosen Accept-Datetime:
     	// http://mementoproxy.lanl.gov/aggr/timegate/http://example.com/
@@ -141,7 +153,7 @@ public class MementoClient {
     	// Disable automatic redirect handling so we can process the 302 ourself 
     	httpclient.getParams().setParameter(ClientPNames.HANDLE_REDIRECTS, false);
  
-    	String url = mTimegateUri + initUrl;
+    	String url = mDefaultTimegateUri + initUrl;
         HttpGet httpget = new HttpGet(url);
         
         // Change the request date to 23:00:00 if this is the first memento.
@@ -161,31 +173,27 @@ public class MementoClient {
         
         httpget.setHeader("Accept-Datetime", acceptDatetime);
         httpget.setHeader("User-Agent", mUserAgent);
-        
-        //log.debug(getHeadersAsString(response.getAllHeaders()));
-        
+                
         log.debug("Accessing: " + httpget.getURI());
         log.debug("Accept-Datetime: " + acceptDatetime);
 
+        log.debug("HC mHR Requesting...");
         HttpResponse response = null;
 		try {			
 			response = httpclient.execute(httpget);
 			
 			log.debug("Response code = " + response.getStatusLine());
 			
-			//log.debug(getHeadersAsString(response.getAllHeaders()));
-		} catch (ClientProtocolException e) {
-			mErrorMessage = "Unable to contact proxy server. ClientProtocolException exception.";
-			log.error(getExceptionStackTraceAsString(e));
-			return;
-		} catch (IOException e) {
-			mErrorMessage = "Unable to contact proxy server. IOException exception.";
-			log.error(getExceptionStackTraceAsString(e));
-			return;
+		} catch (Exception e) {
+			mErrorMessage = "Sorry, we are having problems contacting the server. Please " +
+					"try again later.";
+			//FIXME log.error(Utilities.getExceptionStackTraceAsString(e));
+			return;		
 		} finally {
 			// Deallocate all system resources
 	        httpclient.getConnectionManager().shutdown(); 
 		}
+        log.debug("HC mHR Responded.");
         
         // Get back:
 		// 300 (TCN: list with multiple Mementos to choose from)
@@ -197,29 +205,22 @@ public class MementoClient {
 		if (statusCode == 300) {
 			// TODO: Implement.  Right now the lanl proxy doesn't appear to be returning this
 			// code, so let's just ignore it for now.
-			log.debug("Pick a URL from list");			
+			//FIXME log.debug("Pick a URL from list - NOT IMPLEMENTED");			
 		}
 		else if (statusCode == 302) {
-			// Send browser to Location URL
-			// Note that the date/time of this memento is not given in the Location.
+			// Send browser to Location header URL
+			// Note that the date/time of this memento is not given in the Location but can
+			// be found when parsing the Link header.
 			
 			Header[] headers = response.getHeaders("Location");
 			if (headers.length == 0) {
 				mErrorMessage = "Sorry, but there was an unexpected error that will " +
 					"prevent the Memento from being displayed. Try again in 5 minutes.";
-				log.error("Error: Location header not found in response headers.");
+				//FIXME log.error("Error: Location header not found in response headers.");
 			}
-			else {
-				String redirectUrl = headers[0].getValue();
+			else {					
+				final String redirectUrl = headers[0].getValue();
 				
-				// Find out the datetime of this resource
-				/*SimpleDateTime d = getResourceDatetime(redirectUrl);
-				if (d != null)
-					mDateDisplayed = d;
-					*/
-				
-				log.debug("Sending browser to " + redirectUrl);
-									
 				// We can't update the view directly since we're running
 				// in a thread, so use mUpdateResults to show a toast message
 				// if accessing a different date than what was requested.
@@ -229,29 +230,32 @@ public class MementoClient {
 				// Parse various Links
 				headers = response.getHeaders("Link");
 				if (headers.length == 0) {
-					log.error("Error: Link header not found in response headers.");
+					//FIXME log.error("Error: Link header not found in response headers.");
 					mErrorMessage = "Sorry, but the Memento could not be accessed. Try again in 5 minutes.";
 				}
 				else {
 					String linkValue = headers[0].getValue();
 											
-					mTimeMap = null;
+					mTimeMaps.clear();
 			    	mTimeBundle = null;
+			    	mMementos.clear();
 			    	
 			    	// Get the datetime of this mememnto which should be supplied in the
 			    	// Link: headers
-			    	mDateDisplayed = parseCsvLinks(initUrl, linkValue);
-					
-					// Now that we know the date, update the UI to reflect it
+			    	// Do not add the mementos to the global list of mementos because
+			    	// the global list will be created when we process the timemap later.
+			    	Memento memento = parseCsvLinks(linkValue, false);
 			    	
-					if (mTimeMap != null)
-						if (!accessTimeMap(initUrl))
-							mErrorMessage = "There were problems accessing the Memento's TimeMap.";
+					if (mTimeMaps.size() > 0)
+						if (!accessTimeMap() && mErrorMessage == null)
+							mErrorMessage = "There were problems accessing the Memento's TimeMap. " +
+									"Please try again later.";
 				}
 			}
 		}		
 		else if (statusCode == 404) {
-			mErrorMessage = "Sorry, but there are no Mementos for this URL.";
+			//FIXME log.debug("Received 404 from proxy so no mementos for " + initUrl);
+			mErrorMessage = "Sorry, there are no Mementos for this web page.";
 		}
 		else if (statusCode == 406) {
 														
@@ -264,20 +268,19 @@ public class MementoClient {
 				
 				// The lanl proxy has it wrong.  It should return 404 when the URL is not
 				// present, so we'll just pretend this is a 404.
-				mErrorMessage = "Sorry, but there are no Mementos for this URL.";
-				
-				//log.debug("BODY: " + EntityUtils.toString(response.getEntity());							
+				mErrorMessage = "Sorry, but there are no Mementos for this URL.";						
 			}
 			else {
 				String linkValue = headers[0].getValue();
 				
-				mTimeMap = null;
+				mTimeMaps.clear();
 		    	mTimeBundle = null;
+		    	mMementos.clear();
 		    	
-				parseCsvLinks(initUrl,linkValue);		
+				parseCsvLinks(linkValue, false);		
 		    	
-				if (mTimeMap != null)
-					accessTimeMap(initUrl);
+				if (mTimeMaps.size() > 0)
+					accessTimeMap();
 				
 				if (mFirstMemento == null || mLastMemento == null) {
 					log.error("Could not find first or last Memento in 406 response for " + url);
@@ -289,27 +292,35 @@ public class MementoClient {
 					
 					// According to Rob Sanderson (LANL), we will only get 406 when the date is too
 					// early, so redirect to first Memento
+					
+					// FIXME ?
 										
-					mDateDisplayed = new SimpleDateTime(mFirstMemento.getDateTime());
-					String redirectUrl = mFirstMemento.getUrl();
-					log.debug("Sending browser to " + redirectUrl);
 				}
 			}
 		}
 		else {
 			mErrorMessage = "Sorry, but there was an unexpected error that will " +
 				"prevent the Memento from being displayed. Try again in 5 minutes.";
-			log.error("While GETting URL: "+url);
 			log.error("Unexpected response code in makeHttpRequests = " + statusCode);
-		}
-		
-		// Report error message as a log message:
-		if( mErrorMessage != null ) {
-			log.error(mErrorMessage);
-			this.mErrorMessage = mErrorMessage;
-		}
+		}               
+    }  
+     
+    /**
+     * Makes sure that this link contains a timemap that has not already been seen.
+     * @param link
+     * @return true if the timemap's URL already exists in the list of timemaps, false otherwise.
+     */
+    private boolean timeMapAlreadyExists(Link link) {
+    	for (TimeMap tm : mTimeMaps) {
+			if (tm.getUrl().equals(link.getUrl())) {
+				log.debug("Link contains a duplicate timemap URL that is being " +
+						"ignored: " + link.toString());
+				return true;
+			}
+    	}
+    	
+    	return false;
     }
-    
     
     /**
      * Parse the links in CSV format and return the date of the last item with rel="memento" since
@@ -328,312 +339,242 @@ public class MementoClient {
      *   <http://webcache.googleusercontent.com/search?q=cache:http://www.digitalpreservation.gov/>;rel="first last memento";datetime="Tue, 07 Sep 2010 11:54:29 GMT"
      *   
      * @param links
-     * @return The datetime of the last item marked rel="memento"
      */
-    private SimpleDateTime parseCsvLinks(String initUri, String links) {
-    	if( log.isDebugEnabled() ) {
-    		if( links.length() > 200 ) {
-        		log.debug("Parsing: "+links.substring(0,200));
-    		} else {
-        		log.debug("Parsing: "+links);
-    		}
-    	}
-    	if (mMementos != null ) mMementos.clear();
+    public Memento parseCsvLinks(String links, boolean addToMementoList) {
+    	    	
     	mFirstMemento = null;
     	mLastMemento = null;
-    	mTimeMap = null;
     	
-    	SimpleDateTime date = null;
-    	
-    	// Use a temporary list instead of the actual mMemento list so that we don't 
-    	// show a list of available dates until they have all been parsed.
-    	MementoList tempList = new MementoList();
-    	
-    	log.debug("Start parsing links");
-		String[] linkStrings = links.split("\"\\s*,");
-				
+    	Memento returnMemento = null;
+    	    	
+    	// Dump to file for debugging
+    	//dumpToFile(links);
+    	    	
+		String[] linkStrings = links.split("\"\\s*,");				
+		log.debug("Start parsing " + linkStrings.length + " links");
+		
+		int mementoLinks = 0;
+		
     	// Place all Links into the array and then sort it based on date
     	for (String linkStr : linkStrings) {
 			    		
-			log.debug("LinkStr:" + linkStr);
-			
 			// Add back "
 			if (!linkStr.endsWith("\""))
 				linkStr += "\"";
-			
+						
 			linkStr = linkStr.trim();
 			
 			Link link = new Link(linkStr);
+			
 			String rel = link.getRel();
-			if (rel == null) continue;
 			if (rel.contains("memento")) {
+				mementoLinks++;
 				Memento m = new Memento(link);
-				tempList.add(m);
 				
-				//log.debug("Added memento " + m.toString());
+				// There may be just one memento in the links, so it should be returned
+				if (returnMemento == null)
+					returnMemento = m;
+				
+				if (addToMementoList)
+					mMementos.add(m);				
 				
 				// Peel out all values in rel which are separated by white space
 				String[] items = link.getRelArray();
 				for (String r : items) {						
 					r = r.toLowerCase();
-					
-					//log.debug("Processing rel [" + r + "]");
-					
-					// Change the Showing date to the memento's date
-					//if (link.mRel.equals("first-memento"))
+										
+					// First and last should be reported in 302 response
 					if (r.contains("first")) {
 						mFirstMemento = m;
 					}
 					if (r.contains("last")) {
 						mLastMemento = m;
 					}
-					if (r.equals("memento")) {
-						date = link.getDatetime();
-					}
-				}					
+				}		
 			}
 			else if (rel.equals("timemap")) {
-				mTimeMap = new TimeMap(link);
+				// See if this is really a new timemap (server could be mistaken, and
+				// we don't want to be caught in an infinite loop
+				
+				if (!timeMapAlreadyExists(link)) {
+					log.debug("Adding new timemap " + link.toString());
+					mTimeMaps.add(new TimeMap(link));
+				}
 			}
 			else if (rel.equals("timebundle")) {
 				mTimeBundle = new TimeBundle(link);
 			}
-		}
+		}    	
+    	    	
+    	// Sorting can take a long time.  If there are just a few (like from a TimeGate), 
+    	// go ahead and sort since they are not usually listed in order.  But a large 
+    	// listing from a TimeMap is already sorted by the LANL proxy.
+    	if (addToMementoList && mMementos.size() < 5) {
+    		log.debug("Sorting short Memento list...");
+    		Collections.sort(mMementos);
+    	}
     	
-		log.debug("Finished parsing, found " + tempList.size() + " links");
-		
-		mMementos = tempList;
+    	log.debug("Finished parsing, found " + mementoLinks + " Memento links");		
+    	log.debug("Total mementos: " + mMementos.size());
 				
-		if (date != null)
-			log.debug("parseCsvLinks returning " + date.toString());
-		else
-			log.debug("parseCsvLinks returning null");
+		// If these aren't set then this is likely a timemap 
+		if (mFirstMemento == null)
+			mFirstMemento = mMementos.getFirst();
+		if (mLastMemento == null)
+			mLastMemento = mMementos.getLast();    
 		
-		return date;
-    }
-        
-
+		return returnMemento;
+    }  
+ 
     /**
-     * Change IA URLs back to their original.
+     * Return a timemap that has not been downloaded yet.
      * 
-     * Example of IA URLs: 
-     * 
-     * http://www.foo.org.wstub.archive.org/links.html
-     * http://web.archive.org/web/20071222090517/http://www.foo.org/
-     * http://web.archive.org/web/20070127071850rn_1/www.harding.edu/USER/fmccown/WWW/
+     * @return
      */
-    private String convertIaUrlBack(String iaUrl) {
-    	String url = iaUrl;
+    private TimeMap getTimemapToDownload() {
+//    	if (Log.LOG) {
+//    		Log.d(LOG_TAG, "All " + mTimeMaps.size() + " timemaps:");
+//    		for (TimeMap tm : mTimeMaps) {
+//        		Log.d(LOG_TAG, tm.toString());
+//        	}
+//    	}    	
     	
-    	url = url.replace(".wstub.archive.org", "");
-    	
-    	String pattern = "^http://web.archive.org/.+\\d{14}.*?/";
-    	
-		// Create a Pattern object
-		Pattern r = Pattern.compile(pattern);
-
-		// Now create matcher object.
-		Matcher m = r.matcher(iaUrl);
-		if (m.find()) {
-			log.info("Found value: " + m.group(0));
-			url = m.replaceFirst("");
-		}
-		
-		if (!url.startsWith("http://") && !url.startsWith("https://"))
-			url = "http://" + url;
-		
-		return url;
+    	for (TimeMap tm : mTimeMaps) {
+    		if (!tm.isDownloaded()) 
+    			return tm;
+    	}
+		return null;    	
     }
     
     /**
      * Retrieve the TimeMap from the Web and parse out the Mementos.
      * Currently this only recognizes TimeMaps using CSV formats. 
      * Other formats to be implemented: RDF/XML, N3, and HTML.
+     * Supports paging timemaps where a timemap includes references
+     * to other timemaps.
+     * 
      * @return true if TimeMap was successfully retreived, false otherwise.
      */
-    private boolean accessTimeMap( String initUrl ) {    	   	
+    private boolean accessTimeMap() {    	   	
         
     	HttpClient httpclient = getHttpClient();
     	
-    	String url = mTimeMap.getUrl();
-        HttpGet httpget = new HttpGet(url);
-        httpget.setHeader("User-Agent", mUserAgent);
-                
-        log.debug("Accessing TimeMap: " + httpget.getURI());
-
-        HttpResponse response = null;
-		try {			
-			response = httpclient.execute(httpget);
+    	TimeMap tm = getTimemapToDownload();
+    	
+    	// Access every timemap that has been discovered
+    	while (tm != null) {
+    		    	
+    		tm.setDownloaded(true);
+	    	String url = tm.getUrl();
+	        HttpGet httpget = new HttpGet(url);
+	        httpget.setHeader("User-Agent", mUserAgent);
+	                
+	        log.debug("Accessing TimeMap: " + httpget.getURI());
+	
+	        log.debug("HC TM Requesting...");
+	        HttpResponse response = null;
+			try {			
+				response = httpclient.execute(httpget);				
+				log.debug("Response code = " + response.getStatusLine());
+			} catch (Exception e) {
+				log.error(Utilities.getExceptionStackTraceAsString(e));
+				return false;                
+			}
+	        log.debug("HC TM Responded.");
 			
-			log.debug("Response code = " + response.getStatusLine());
-			
-			//log.debug(getHeadersAsString(response.getAllHeaders()));
-		} catch (ClientProtocolException e) {
-			log.error(getExceptionStackTraceAsString(e));
-			return false;
-		} catch (IOException e) {
-			log.error(getExceptionStackTraceAsString(e));
-			return false;
-		}                
-        
-        // Should get back 200
-		
-		int statusCode = response.getStatusLine().getStatusCode(); 
-		if (statusCode == 200) {
-			
-			// See if MIME type is the same as Type		
-			Header type = response.getFirstHeader("Content-Type");
-			if (type == null)
-				log.warn("Could not find the Content-Type for " + url);
-			else if (!type.getValue().contains(mTimeMap.getType()))
-				log.warn("Content-Type is [" + type.getValue() + "] but TimeMap type is [" +
-						mTimeMap.getType() + "] for " + url);
-			
-			// Timemap MUST be "application/link-format", but leave csv for
-			// backwards-compatibility with earlier Memento implementations
-			if (mTimeMap.getType().equals("text/csv") ||
-				mTimeMap.getType().equals("application/link-format")) {
-				try {
-					String responseBody = EntityUtils.toString(response.getEntity());
-					parseCsvLinks(initUrl,responseBody);
-				} catch (ParseException e) {
-					log.error(getExceptionStackTraceAsString(e));
-					return false;
-				} catch (IOException e) {
-					log.error(getExceptionStackTraceAsString(e));
+	        // Should get back 200 unless something is really wrong			
+			int statusCode = response.getStatusLine().getStatusCode(); 
+			if (statusCode == 200) {
+				
+				// See if MIME type is the same as Type		
+				Header type = response.getFirstHeader("Content-Type");
+				if (type == null) {
+					log.warn("Could not find the Content-Type for " + url);
+				}
+				else if (!type.getValue().contains(tm.getType())) {
+					log.warn("Content-Type is [" + type.getValue() + "] but TimeMap type is [" +
+							tm.getType() + "] for " + url);
+				}
+				
+				// Timemap MUST be "application/link-format", but leave csv for
+				// backwards-compatibility with earlier Memento implementations
+				if (tm.getType().equals("text/csv") ||
+						tm.getType().equals("application/link-format")) {
+					try {
+						String responseBody = EntityUtils.toString(response.getEntity());
+						parseCsvLinks(responseBody, true); 
+					} catch (Exception ex) {
+						//log.error(Utilities.getExceptionStackTraceAsString(ex));
+						ex.printStackTrace();
+						httpclient.getConnectionManager().shutdown();
+						return false;
+					} 
+				}
+				else {
+					log.error("Unable to handle TimeMap type " + tm.getType());
+					httpclient.getConnectionManager().shutdown();
 					return false;
 				}
-			}
-			else {
-				log.error("Unable to handle TimeMap type " + mTimeMap.getType());
+			}		
+			else if (statusCode == 404) {
+				log.debug("404 response means no mementos");
+				httpclient.getConnectionManager().shutdown();
+				mErrorMessage = "Sorry, there are no Mementos for this web page.";
 				return false;
 			}
-		}		
-		else {
-			log.debug("Unexpected response code in accessTimeMap = " + statusCode);
-			return false;
-		}        
-        
+			else {
+				log.debug("Unexpected response code in accessTimeMap = " + statusCode);
+				httpclient.getConnectionManager().shutdown();
+				return false;
+			}        
+			
+			tm = getTimemapToDownload();
+    	}
+    	
 		// Deallocate all system resources
         httpclient.getConnectionManager().shutdown();
-        
+
+        log.debug("HC Shutdown");
+
         return true;
     }
     
-    public static String getExceptionStackTraceAsString(Exception exception) {
-    	StringWriter sw = new StringWriter();
-    	exception.printStackTrace(new PrintWriter(sw));
-    	return sw.toString();
-    }
-    
-    /**
-     * Purely for testing.
-     */
-    @SuppressWarnings("unused")
-	private void testMementos() {
-    	
-    	String[] urls = {
-    			"http://www.foo.org.wstub.archive.org/links.html",
-    			"http://web.archive.org/web/20071222090517/http://www.foo.org/",
-    			"http://web.archive.org/web/20070127071850rn_1/www.harding.edu/USER/fmccown/WWW/"
-    	};
-    	
-    	for (String u : urls) {
-    		System.out.println("Convert " + u + " to " + convertIaUrlBack(u));
-    	}
-    	    		
-    	SimpleDateTime date = new SimpleDateTime();
-    	System.out.println("date = " + date);
-    	
-    	SimpleDateTime date2 = new SimpleDateTime();
-    	System.out.println("date2 = " + date2);
-    	
-    	int comp = date.compareTo(date2);
-    	System.out.println("compareTo = " + comp);
-    	
-    	date = new SimpleDateTime(31, 12, 2010);
-    	System.out.println("date formatted = " + date.dateFormatted());
-    	System.out.println("date and time formatted = " + date.dateAndTimeFormatted());
-    	System.out.println("long formatted = " + date.longDateFormatted());
-    	
-    	
-    	//System.exit(0);
-    	//this.finish();
-    	
-    	String url = "<http://web.archive.org/web/20010910203350/www.harding.edu/fmccown/>;rel=\"memento\";datetime=\"Mon, 10 Sep 2001 20:33:50 GMT\"";
-    	Memento m1 = new Memento(new Link(url));
-    	System.out.println("m1=" + m1.toString());
-    	System.out.println("getDateTimeString: " + m1.getDateTimeString());
-    	System.out.println("getDateTimeSimple: " + m1.getDateTimeSimple());
-    	
-    	Memento m2 = new Memento(new Link(url));
-    	
-    	System.out.println("m2=" + m2.toString());
-    	System.out.println("getDateTimeString: " + m2.getDateTimeString());
-    	System.out.println("getDateTimeSimple: " + m2.getDateTimeSimple());
-    	
-    	System.out.println("\ncompare m1,m2: " + m1.compareTo(m2));
-    	System.out.println("\ncompare m2,m1: " + m2.compareTo(m1));
-    	
-    	String newDatetime = "Sun, 09 Sep 2001 20:33:50 GMT";
-    	m2.setDateTime(newDatetime);
-    	
-    	System.out.println("getDateTimeString: " + m2.getDateTimeString());
-    	System.out.println("getDateTimeSimple: " + m2.getDateTimeSimple());
-    	
-    	System.out.println("\ncompare m1,m2: " + m1.compareTo(m2));
-    	System.out.println("\ncompare m2,m1: " + m2.compareTo(m1));
-    	
-    	m2.getDateTime().setToLastHour();
-    	
-    	System.out.println("New value for getDateTimeString: " + m2.getDateTimeString());
-    	    	
-    	    	
-    	String links = 
-    		"<http://mementoproxy.lanl.gov/aggr/timebundle/http://www.harding.edu/fmccown/>;rel=\"timebundle\"," +
-    		"<http://www.harding.edu/fmccown/>;rel=\"original\",<http://mementoproxy.lanl.gov/aggr/timemap/link/http://www.harding.edu/fmccown/>;rel=\"timemap\";type=\"text/csv\"," +
-    		"<http://web.archive.org/web/20010724154504/www.harding.edu/fmccown/>;rel=\"first prev memento\";datetime=\"Tue, 24 Jul 2001 15:45:04 GMT\"," +
-    		"<http://web.archive.org/web/20071222090517/www.harding.edu/fmccown/>;rel=\"last memento\";datetime=\"Sat, 22 Dec 2007 09:05:17 GMT\"," +
-    		"<http://web.archive.org/web/20020104194811/www.harding.edu/fmccown/>;rel=\"next memento\";datetime=\"Fri, 04 Jan 2002 19:48:11 GMT\"," +
-    		"<http://web.archive.org/web/20010910203350/www.harding.edu/fmccown/>;rel=\"memento\";datetime=\"Mon, 10 Sep 2001 20:33:50 GMT\"," + 
-    		"<http://webcache.googleusercontent.com/search?q=cache:http://www.digitalpreservation.gov/>;rel=\"first last memento\";datetime=\"Tue, 07 Sep 2010 11:54:29 GMT\"";
-    	
-    	parseCsvLinks(url,links);
-    	mMementos.displayAll();
-    	
-    	System.exit(0);
-    	
-    	System.out.println(mTimeMap.toString());
-    	System.out.println(mTimeBundle.toString());
-    	
-    	System.out.println("\nAll years:");
-    	for (CharSequence year : mMementos.getAllYears()) {
-    		System.out.println(year);
-    	}
-    	
-    	System.out.println("\nAll for 2001:");
-    	for (CharSequence year : mMementos.getDatesForYear(2001)) {
-    		System.out.println(year);
-    	}
-    	
-
-    	System.out.println("\nAll for 2000:");
-    	for (CharSequence year : mMementos.getDatesForYear(2000)) {
-    		System.out.println(year);
-    	}
-    	
-    	//date = getResourceDatetimeForWebcite("http://webcitation.org/query?id=1218127693715930");
-    	//System.out.println("Date returned from getResourceDatetimeForWebcite: " + date.toString());
-    	
-    	//accessTimeMap();
-    }
-    
+    //@Deprecated
     public void setTargetURI( String target ) {
+		// Just in case an archive URL was being viewed
+    	target = Utilities.getUrlFromArchiveUrl(target);
+		
+		// Load the Timemap directly.  I'm hard-coded the timemap URLs for 
+		// which unfortunately may need to be changed over time.
+		String timemapUrl = "http://mementoproxy.lanl.gov/aggr/timemap/link/1/";    			
+		if (mDefaultTimegateUri.startsWith("http://mementoproxy.cs.odu"))
+			timemapUrl = "http://mementoproxy.cs.odu.edu/aggr/timemap/link/";
+			
+		timemapUrl = "<" + timemapUrl + 
+				target + ">;rel=\"timemap\";type=\"application/link-format\"";
+		Link link = new Link(timemapUrl);
+		mTimeMaps.clear();
+		mTimeMaps.add(new TimeMap(link));
+		if (!accessTimeMap() && mErrorMessage == null)
+			mErrorMessage = "There were problems accessing the Memento's TimeMap. " +
+					"Please try again later.";
+    	
     	this.makeHttpRequests( target );
     }
-    
+
+    //@Deprecated
     public MementoList getMementos() {
     	return this.mMementos;
+    }
+
+    /**
+     * 
+     * @param uri
+     * @return
+     */
+    public MementoList getMementos(String uri) {
+    	this.setTargetURI(uri);
+    	return this.getMementos();
     }
     
     /**
@@ -648,14 +589,14 @@ public class MementoClient {
 	 * @return the mTimegateUri
 	 */
 	public String getTimegateUri() {
-		return mTimegateUri;
+		return mDefaultTimegateUri;
 	}
 
 	/**
 	 * @param mTimegateUri the mTimegateUri to set
 	 */
 	public void setTimegateUri(String mTimegateUri) {
-		this.mTimegateUri = mTimegateUri;
+		this.mDefaultTimegateUri = mTimegateUri;
 	}
 	
     /**
@@ -671,11 +612,15 @@ public class MementoClient {
     	System.out.println("Looking for: "+query);
     	// Query:
     	MementoClient mc = new MementoClient();
-    	mc.setTimegateUri("http://www.webarchive.org.uk/wayback/memento/timegate/");
+    	long start = System.currentTimeMillis();
+        log.debug("Launch: "+Calendar.getInstance());
+    	//mc.setTimegateUri("http://www.webarchive.org.uk/wayback/memento/timegate/");
     	mc.setTargetURI(query);
+        log.debug("Qdone: "+Calendar.getInstance());
+        long end = System.currentTimeMillis();
     	// Get results:
-    	mc.getMementos().displayAll();
-    	
+    	//mc.getMementos().displayAll();
+    	log.debug("Duration: "+(end-start)/1000.0);
     }
     
 }
