@@ -45,17 +45,12 @@ package dev.memento;
  * #L%
  */
 
-import java.io.PrintWriter;
-import java.io.StringWriter;
 import java.net.URISyntaxException;
 import java.text.DateFormat;
 import java.util.Calendar;
 import java.util.Collections;
-import java.util.Date;
 import java.util.HashSet;
 import java.util.Locale;
-import java.util.regex.Matcher;
-import java.util.regex.Pattern;
 
 import org.apache.http.Header;
 import org.apache.http.HttpHost;
@@ -78,10 +73,8 @@ public class MementoClient {
     static final int DIALOG_MEMENTO_YEARS = 3;
     static final int DIALOG_HELP = 4;
     
-	private String[] mTimegateUris = { 
-			"http://mementoproxy.lanl.gov/aggr/timegate/" , 
-			"http://mementoproxy.lanl.gov/google/timegate/"
-			};
+	private String[] mTimegateUris = { "http://www.mementoweb.org/timegate/" };
+
 	// Let the TimeGate URI default to LANL Aggregator:
 	private String mDefaultTimegateUri = mTimegateUris[0];
 	
@@ -102,6 +95,9 @@ public class MementoClient {
 
     // Used in http requests
     public String mUserAgent;
+
+	private String mDefaultErrorMessage = "Sorry, but there was an unexpected error that will "
+			+ "prevent the Memento from being displayed. Try again in 5 minutes.";
 
     /**
      * 
@@ -206,17 +202,20 @@ public class MementoClient {
 			// TODO: Implement.  Right now the lanl proxy doesn't appear to be returning this
 			// code, so let's just ignore it for now.
 			//FIXME log.debug("Pick a URL from list - NOT IMPLEMENTED");			
-		}
-		else if (statusCode == 302) {
+		} else if (statusCode == 301) {
+			mErrorMessage = mDefaultErrorMessage;
+			log.info("Got 301 pointing to: "
+					+ response.getHeaders("Location")[0]);
+			log.error("Status code 301 not supported!");
+		} else if (statusCode == 302) {
 			// Send browser to Location header URL
 			// Note that the date/time of this memento is not given in the Location but can
 			// be found when parsing the Link header.
 			
 			Header[] headers = response.getHeaders("Location");
 			if (headers.length == 0) {
-				mErrorMessage = "Sorry, but there was an unexpected error that will " +
-					"prevent the Memento from being displayed. Try again in 5 minutes.";
-				//FIXME log.error("Error: Location header not found in response headers.");
+				mErrorMessage = mDefaultErrorMessage;
+				log.error("Error: Location header not found in response headers.");
 			}
 			else {					
 				final String redirectUrl = headers[0].getValue();
@@ -230,7 +229,7 @@ public class MementoClient {
 				// Parse various Links
 				headers = response.getHeaders("Link");
 				if (headers.length == 0) {
-					//FIXME log.error("Error: Link header not found in response headers.");
+					log.error("Error: Link header not found in response headers.");
 					mErrorMessage = "Sorry, but the Memento could not be accessed. Try again in 5 minutes.";
 				}
 				else {
