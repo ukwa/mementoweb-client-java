@@ -1,4 +1,5 @@
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+   xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
    <parent>
       <groupId>org.sonatype.oss</groupId>
       <artifactId>oss-parent</artifactId>
@@ -8,7 +9,7 @@
    <groupId>uk.bl.wa.memento</groupId>
    <artifactId>mementoweb-client-java</artifactId>
    <name>MementoWeb Java Client</name>
-   <version>1.1.6-SNAPSHOT</version>
+   <version>1.1.5-SNAPSHOT</version>
    <organization>
       <name>The British Library</name>
       <url>http://www.bl.uk/</url>
@@ -69,6 +70,19 @@
                   <phase>process-sources</phase>
                </execution>
             </executions>
+         </plugin>
+         <plugin>
+            <groupId>org.sonatype.plugins</groupId>
+            <artifactId>nexus-staging-maven-plugin</artifactId>
+            <version>1.1</version>
+            <extensions>true</extensions>
+            <configuration>
+               <!-- The Base URL of Nexus instance where we want to stage -->
+               <nexusUrl>http://oss.sonatype.org/</nexusUrl>
+               <!-- The server "id" element from settings to use authentication 
+                  from -->
+               <serverId>sonatype-nexus-staging</serverId>
+            </configuration>
          </plugin>
       </plugins>
    </build>
