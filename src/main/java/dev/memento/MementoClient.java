@@ -544,6 +544,7 @@ public class MementoClient {
 		// Just in case an archive URL was being viewed
     	target = Utilities.getUrlFromArchiveUrl(target);
     	// Start the requests...
+    	this.mErrorMessage = null;
     	this.makeHttpRequests( target );
     }
 
