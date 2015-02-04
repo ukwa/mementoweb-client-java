@@ -7,7 +7,7 @@
    <modelVersion>4.0.0</modelVersion>
    <groupId>uk.bl.wa.memento</groupId>
    <artifactId>mementoweb-client-java</artifactId>
-   <name>MementoWeb Java Client Stubs</name>
+   <name>MementoWeb Java Client</name>
    <version>1.1.5-SNAPSHOT</version>
    <organization>
       <name>The British Library</name>

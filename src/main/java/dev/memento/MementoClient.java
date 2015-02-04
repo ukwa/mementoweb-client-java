@@ -73,7 +73,7 @@ public class MementoClient {
     static final int DIALOG_MEMENTO_YEARS = 3;
     static final int DIALOG_HELP = 4;
     
-	private String[] mTimegateUris = { "http://www.mementoweb.org/timegate/" };
+	private String[] mTimegateUris = { "http://timetravel.mementoweb.org/timegate/" };
 
 	// Let the TimeGate URI default to LANL Aggregator:
 	private String mDefaultTimegateUri = mTimegateUris[0];
@@ -183,7 +183,7 @@ public class MementoClient {
 		} catch (Exception e) {
 			mErrorMessage = "Sorry, we are having problems contacting the server. Please " +
 					"try again later.";
-			//FIXME log.error(Utilities.getExceptionStackTraceAsString(e));
+			log.error("Exception when performing query: ", e);
 			return;		
 		} finally {
 			// Deallocate all system resources
@@ -498,6 +498,7 @@ public class MementoClient {
 				// Timemap MUST be "application/link-format", but leave csv for
 				// backwards-compatibility with earlier Memento implementations
 				if (tm.getType().equals("text/csv") ||
+						tm.getType().equals("application/link-format") ||
 						tm.getType().equals("application/link-format")) {
 					try {
 						String responseBody = EntityUtils.toString(response.getEntity());
@@ -542,22 +543,7 @@ public class MementoClient {
     public void setTargetURI( String target ) {
 		// Just in case an archive URL was being viewed
     	target = Utilities.getUrlFromArchiveUrl(target);
-		
-		// Load the Timemap directly.  I'm hard-coded the timemap URLs for 
-		// which unfortunately may need to be changed over time.
-		String timemapUrl = "http://mementoproxy.lanl.gov/aggr/timemap/link/1/";    			
-		if (mDefaultTimegateUri.startsWith("http://mementoproxy.cs.odu"))
-			timemapUrl = "http://mementoproxy.cs.odu.edu/aggr/timemap/link/";
-			
-		timemapUrl = "<" + timemapUrl + 
-				target + ">;rel=\"timemap\";type=\"application/link-format\"";
-		Link link = new Link(timemapUrl);
-		mTimeMaps.clear();
-		mTimeMaps.add(new TimeMap(link));
-		if (!accessTimeMap() && mErrorMessage == null)
-			mErrorMessage = "There were problems accessing the Memento's TimeMap. " +
-					"Please try again later.";
-    	
+    	// Start the requests...
     	this.makeHttpRequests( target );
     }
 
