@@ -7,6 +7,7 @@ import java.io.IOException;
 
 import org.apache.http.HttpEntity;
 import org.apache.http.client.ClientProtocolException;
+import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.methods.CloseableHttpResponse;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.protocol.HttpClientContext;
@@ -44,7 +45,13 @@ public class MementosAggregator {
 		cm.setDefaultMaxPerRoute(20);
 
 		//
-		httpClient = HttpClients.custom().setConnectionManager(cm).build();
+		int timeoutSeconds = 30;
+		RequestConfig requestConfig = RequestConfig.custom()
+				.setConnectTimeout(timeoutSeconds * 1000)
+				.setSocketTimeout(timeoutSeconds * 1000).build();
+		httpClient = HttpClients.custom()
+				.setDefaultRequestConfig(requestConfig)
+				.setConnectionManager(cm).build();
 
 	}
 
@@ -110,8 +117,10 @@ public class MementosAggregator {
 				}
 			} catch (ClientProtocolException ex) {
 				// Handle protocol errors
+				System.err.println("ERROR " + ex + " for " + httpget.getURI());
 			} catch (IOException ex) {
 				// Handle I/O errors
+				System.err.println("ERROR " + ex + " for " + httpget.getURI());
 			}
 			long end = System.currentTimeMillis();
 			System.out.println(httpget.getURI() + " took " + (end - start));
@@ -125,7 +134,7 @@ public class MementosAggregator {
 
 		MementosAggregator me = new MementosAggregator();
 		try {
-			me.lookup("http://www.google.com");
+			me.lookup("http://www.google.co.uk");
 		} catch (InterruptedException e) {
 			// TODO Auto-generated catch block
 			e.printStackTrace();
