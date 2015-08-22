@@ -59,7 +59,9 @@ import org.apache.http.client.HttpClient;
 import org.apache.http.client.methods.HttpGet;
 import org.apache.http.client.params.ClientPNames;
 import org.apache.http.conn.params.ConnRoutePNames;
+import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
 import org.apache.log4j.Logger;
 
@@ -74,6 +76,8 @@ public class MementoClient {
     static final int DIALOG_HELP = 4;
     
 	private String[] mTimegateUris = { "http://timetravel.mementoweb.org/timegate/" };
+	
+	private HttpClient httpClient;
 
 	// Let the TimeGate URI default to LANL Aggregator:
 	private String mDefaultTimegateUri = mTimegateUris[0];
@@ -110,24 +114,45 @@ public class MementoClient {
         // Holds all the timemaps for the web page being viewed
         mTimeMaps = new HashSet<TimeMap>();    	
         mMementos = new MementoList();       
-        
+        //
+        setupHttpClient();
+    }
+
+    /**
+     * 
+     * @param timegate
+     */
+    public MementoClient(String timegate) {
+    	this();
+    	this.setTimegateUri(timegate);
+    }
+    
+    public MementoClient(String timegate, HttpClient httpClient) {
+    	this();
+    	this.setTimegateUri(timegate);
+    	this.httpClient = httpClient;
     }
     
     /**
      *  Helper to create a web-proxy-aware HttpClient:
      * @return
      */
-    private HttpClient getHttpClient() {
-    	HttpClient httpclient = new DefaultHttpClient();
+    private void setupHttpClient() {
+    	if( httpClient != null) return;
+    	
+    	// Disable automatic redirect handling so we can process the 302 ourself 
+		httpClient = HttpClientBuilder.create()
+			    .disableRedirectHandling()
+			    .build();
+		
     	if( System.getProperty("http.proxyHost") != null ) {
     		HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
     				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
-    		httpclient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    		httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
     		log.debug("Proxying via "+proxy);
     	} else {
     		log.debug("No web proxy.");
     	}
-    	return httpclient;
     }
 
 		
@@ -143,11 +168,6 @@ public class MementoClient {
     	// Contact Memento proxy with chosen Accept-Datetime:
     	// http://mementoproxy.lanl.gov/aggr/timegate/http://example.com/
     	// Accept-Datetime: Tue, 24 Jul 2001 15:45:04 GMT    	   	
-        
-    	HttpClient httpclient = getHttpClient();
-    	
-    	// Disable automatic redirect handling so we can process the 302 ourself 
-    	httpclient.getParams().setParameter(ClientPNames.HANDLE_REDIRECTS, false);
  
     	String url = mDefaultTimegateUri + initUrl;
         HttpGet httpget = new HttpGet(url);
@@ -176,18 +196,15 @@ public class MementoClient {
         log.debug("HC mHR Requesting...");
         HttpResponse response = null;
 		try {			
-			response = httpclient.execute(httpget);
+			response = httpClient.execute(httpget);
 			
 			log.debug("Response code = " + response.getStatusLine());
 			
 		} catch (Exception e) {
 			mErrorMessage = "Sorry, we are having problems contacting the server. Please " +
 					"try again later.";
-			log.error("Exception when performing query: ", e);
+			log.error("Exception when performing query to "+this.getTimegateUri(), e);
 			return;		
-		} finally {
-			// Deallocate all system resources
-	        httpclient.getConnectionManager().shutdown(); 
 		}
         log.debug("HC mHR Responded.");
         
@@ -394,10 +411,14 @@ public class MementoClient {
 			else if (rel.equals("timemap")) {
 				// See if this is really a new timemap (server could be mistaken, and
 				// we don't want to be caught in an infinite loop
-				
-				if (!timeMapAlreadyExists(link)) {
-					log.debug("Adding new timemap " + link.toString());
-					mTimeMaps.add(new TimeMap(link));
+				TimeMap tm = new TimeMap(link);
+				if( "application/link-format".equalsIgnoreCase(tm.getType()) ) {
+					if (!timeMapAlreadyExists(link)) {
+						log.debug("Adding new timemap " + link.toString());
+						mTimeMaps.add(tm);
+					}
+				} else {
+					log.info("Skipping timemap in unsupported format "+tm.getType());
 				}
 			}
 			else if (rel.equals("timebundle")) {
@@ -455,9 +476,7 @@ public class MementoClient {
      * @return true if TimeMap was successfully retreived, false otherwise.
      */
     private boolean accessTimeMap() {    	   	
-        
-    	HttpClient httpclient = getHttpClient();
-    	
+
     	TimeMap tm = getTimemapToDownload();
     	
     	// Access every timemap that has been discovered
@@ -473,7 +492,7 @@ public class MementoClient {
 	        log.debug("HC TM Requesting...");
 	        HttpResponse response = null;
 			try {			
-				response = httpclient.execute(httpget);				
+				response = httpClient.execute(httpget);				
 				log.debug("Response code = " + response.getStatusLine());
 			} catch (Exception e) {
 				log.error(Utilities.getExceptionStackTraceAsString(e));
@@ -506,41 +525,33 @@ public class MementoClient {
 					} catch (Exception ex) {
 						//log.error(Utilities.getExceptionStackTraceAsString(ex));
 						ex.printStackTrace();
-						httpclient.getConnectionManager().shutdown();
 						return false;
 					} 
 				}
 				else {
 					log.error("Unable to handle TimeMap type " + tm.getType());
-					httpclient.getConnectionManager().shutdown();
 					return false;
 				}
 			}		
 			else if (statusCode == 404) {
 				log.debug("404 response means no mementos");
-				httpclient.getConnectionManager().shutdown();
 				mErrorMessage = "Sorry, there are no Mementos for this web page.";
 				return false;
 			}
 			else {
 				log.debug("Unexpected response code in accessTimeMap = " + statusCode);
-				httpclient.getConnectionManager().shutdown();
 				return false;
 			}        
 			
 			tm = getTimemapToDownload();
     	}
     	
-		// Deallocate all system resources
-        httpclient.getConnectionManager().shutdown();
-
-        log.debug("HC Shutdown");
-
         return true;
     }
     
     //@Deprecated
     public void setTargetURI( String target ) {
+    	log.debug("Looking for "+target);
 		// Just in case an archive URL was being viewed
     	target = Utilities.getUrlFromArchiveUrl(target);
     	// Start the requests...
@@ -583,6 +594,11 @@ public class MementoClient {
 	 */
 	public void setTimegateUri(String mTimegateUri) {
 		this.mDefaultTimegateUri = mTimegateUri;
+	}
+	
+	public void finalise() {
+		// Deallocate all system resources
+        httpClient.getConnectionManager().shutdown();
 	}
 	
     /**
