@@ -33,6 +33,7 @@ public class MementoClientTest {
 	@Before
 	public void setUp() throws Exception {
 		mc = new MementoClient();
+		mc.setTimegateUri("http://www.webarchive.org.uk/wayback/archive/");
 	}
 
 	@Test
@@ -40,11 +41,6 @@ public class MementoClientTest {
 		System.out.println("Testing via "+mc.getTimegateUri());
 		mc.setTargetURI("http://www.bl.uk");
 		MementoList ms = mc.getMementos();
-		assertNull("Got error message: " + mc.getErrorMessage(),
-				mc.getErrorMessage());
-		printMementosSummary(ms);
-
-		ms = mc.getMementos("http://www.jam.org.uk/");
 		assertNull("Got error message: " + mc.getErrorMessage(),
 				mc.getErrorMessage());
 		printMementosSummary(ms);

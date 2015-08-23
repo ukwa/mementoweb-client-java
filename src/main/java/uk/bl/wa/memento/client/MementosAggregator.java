@@ -3,6 +3,26 @@
  */
 package uk.bl.wa.memento.client;
 
+/*
+ * #%L
+ * MementoWeb Java Client
+ * %%
+ * Copyright (C) 2012 - 2015 The British Library
+ * %%
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ * 
+ *      http://www.apache.org/licenses/LICENSE-2.0
+ * 
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ * #L%
+ */
+
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
@@ -106,25 +126,22 @@ public class MementosAggregator {
 		// create a thread for each URI
 		GetThread[] threads = new GetThread[timeMapPrefixes.size()];
 		for (int i = 0; i < threads.length; i++) {
-			log.error("Defining "+i+" "+timeGates.get(i));
 			MementoClient httpget = new MementoClient(timeGates.get(i), httpClient);
 			threads[i] = new GetThread(ms, httpget, url);
 		}
 
 		// start the threads
 		for (int j = 0; j < threads.length; j++) {
-			log.warn("Starting..."+j);
 			threads[j].start();
 		}
 
 		// join the threads
 		for (int j = 0; j < threads.length; j++) {
-			log.warn("JOINING..."+j);
 			threads[j].join();
 		}
 		long end = System.currentTimeMillis();
 
-		log.error("Overall, took " + (end - start) + " got "+ms.values().size()+ " mementos.");
+		log.info("Overall, took " + (end - start) + " got "+ms.values().size()+ " mementos.");
 		
 		MementoList ml = new MementoList();
 		for( Memento m : ms.values()) {
@@ -154,7 +171,7 @@ public class MementosAggregator {
 			try {
 				mc.setTargetURI(url);
 				for( Memento item: mc.getMementos()) {
-					log.info("TG+"+mc.getTimegateUri()+":\n\t"+item.getUrl());
+					log.debug("TG+"+mc.getTimegateUri()+":\n\t"+item.getUrl());
 					ms.put(item.getDateTimeString(), item);
 				}
 			} catch (RuntimeException ex) {
@@ -162,7 +179,7 @@ public class MementosAggregator {
 				log.error("ERROR-- " + ex + " for " + url, ex);
 			}
 			long end = System.currentTimeMillis();
-			log.info(url + " took " + (end - start));
+			log.debug("TG " + mc.getTimegateUri()+ " + " + url + " took " + (end - start));
 		}
 	}
 
