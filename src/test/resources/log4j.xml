@@ -33,7 +33,7 @@
     <level value="debug"/> 
   </logger>
 
-  <logger name="uk.bl.wa.memento">
+  <logger name="uk.bl">
     <level value="debug"/> 
   </logger>
 

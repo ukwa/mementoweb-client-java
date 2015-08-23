@@ -23,10 +23,13 @@ package uk.bl.wa.memento.client;
  * #L%
  */
 
+import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
 import java.util.Collection;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ConcurrentHashMap;
 
 import javax.xml.parsers.DocumentBuilder;
@@ -44,6 +47,7 @@ import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.protocol.HttpContext;
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
+import org.w3c.dom.Node;
 import org.w3c.dom.NodeList;
 
 import dev.memento.Memento;
@@ -75,6 +79,8 @@ public class MementosAggregator {
 	
 	private List<String> timeMapPrefixes;
 	private List<String> timeGates;
+	
+	private Map<String,String> icons;
 
 	public MementosAggregator() {
 		// Try to get latest list:
@@ -183,10 +189,11 @@ public class MementosAggregator {
 		}
 	}
 
-	private  void getTimeMapPrefixes() throws Exception {
+	private void getTimeMapPrefixes() throws Exception {
 		//
 		this.timeMapPrefixes = new ArrayList<String>();
 		this.timeGates = new ArrayList<String>();
+		this.icons = new HashMap<String,String>();
 		//
 		DocumentBuilderFactory domFactory = DocumentBuilderFactory
 				.newInstance();
@@ -197,26 +204,44 @@ public class MementosAggregator {
 				"http://labs.mementoweb.org/aggregator_config/archivelist.xml")
 				.openStream());
 		XPath xpath = XPathFactory.newInstance().newXPath();
-		// XPath Query for showing all nodes value
-		XPathExpression expr = xpath.compile("//links/link/timemap");
+		// XPath Query for iterating through link objects:
+		//XPathExpression expr = xpath.compile("(//links/link/timegate|//links/link/timemap)");
+		XPathExpression expr = xpath.compile("//links/link");
 
+		// Go through the link entries:
 		Object result = expr.evaluate(doc, XPathConstants.NODESET);
 		NodeList nodes = (NodeList) result;
 		for (int i = 0; i < nodes.getLength(); i++) {
-			timeMapPrefixes.add(nodes.item(i).getAttributes().getNamedItem("uri")
-					.getNodeValue());
+			Node n = nodes.item(i);
+			// Look for timegate and timemap:
+			String timeMap = xpath.evaluate("./timemap[1]/@uri", n);
+			if(timeMap != null && ! timeMap.trim().isEmpty() ) {
+				timeMapPrefixes.add(timeMap);
+				log.info("Got TM: "+timeMap);
+			}
+			String timeGate = xpath.evaluate("./timegate[1]/@uri", n);
+			if(timeGate != null && ! timeGate.trim().isEmpty() ) {
+				timeGates.add(timeGate);
+				log.info("Got TG: "+timeGate);
+			}
+			// Icon
+			String icon = xpath.evaluate("./icon/@uri", n);
+			if( icon != null && ! icon.trim().isEmpty() ) {
+				String uri = timeGate;
+				if( uri.endsWith("/timegate/")) {
+					uri = uri.substring(0, uri.length() - 9);
+				}
+				this.icons.put(uri,icon);
+				log.info("Got icon: "+uri+" > "+icon);
+			}
 		}
-
-		// XPath Query for showing all nodes value
-		expr = xpath.compile("//links/link/timegate");
-
-		result = expr.evaluate(doc, XPathConstants.NODESET);
-		nodes = (NodeList) result;
-		for (int i = 0; i < nodes.getLength(); i++) {
-			timeGates.add(nodes.item(i).getAttributes().getNamedItem("uri")
-					.getNodeValue());
+	}
+	
+	public String getIconUriForMemento( Memento m ) {
+		for( String prefix: this.icons.keySet()) {
+			if( m.getUrl().startsWith(prefix)) return this.icons.get(prefix);
 		}
-
+		return null;
 	}
 
 	/**
