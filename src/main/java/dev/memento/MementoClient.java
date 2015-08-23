@@ -418,7 +418,7 @@ public class MementoClient {
 						mTimeMaps.add(tm);
 					}
 				} else {
-					log.info("Skipping timemap in unsupported format "+tm.getType());
+					log.debug("Skipping timemap in unsupported format "+tm.getType());
 				}
 			}
 			else if (rel.equals("timebundle")) {

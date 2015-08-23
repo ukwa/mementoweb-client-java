@@ -90,7 +90,7 @@ public class MementosAggregator {
 		}
 		// Output
 		for( String tg : this.timeGates ) {
-			log.error("TG: "+tg);
+			log.info("TG: "+tg);
 		}
 		
 		// Increase max total connection to 200
@@ -226,13 +226,8 @@ public class MementosAggregator {
 	public static void main(String[] args) throws Exception {
 
 		MementosAggregator me = new MementosAggregator();
-		try {
-			me.lookup("http://www.bl.uk");
-		} catch (InterruptedException e) {
-			// TODO Auto-generated catch block
-			e.printStackTrace();
-		}
-
+		MementoList ms = me.lookup("http://www.bl.uk");
+		System.out.println("Got "+ms.size()+" mementos.");
 	}
 
 }
