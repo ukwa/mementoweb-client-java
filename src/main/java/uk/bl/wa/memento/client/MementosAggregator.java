@@ -107,7 +107,8 @@ public class MementosAggregator {
 		cm.setDefaultMaxPerRoute(20);
 
 		//
-		int timeoutSeconds = 15;
+		int connectionTimeoutSeconds = 5;
+		int responseTimeoutSeconds   = 20;
 		// Proxy?
 		HttpHost proxy = null;
 		if( System.getProperty("http.proxyHost") != null ) {
@@ -119,8 +120,8 @@ public class MementosAggregator {
     	}
 		// Set up request config:
 		RequestConfig requestConfig = RequestConfig.custom()
-				.setConnectTimeout(timeoutSeconds * 1000)
-				.setSocketTimeout(timeoutSeconds * 1000).setProxy(proxy).build();
+				.setConnectTimeout(connectionTimeoutSeconds * 1000)
+				.setSocketTimeout(responseTimeoutSeconds * 1000).setProxy(proxy).build();
     	// Set up the client:
 		httpClient = HttpClients.custom()
 				.setDefaultRequestConfig(requestConfig)
