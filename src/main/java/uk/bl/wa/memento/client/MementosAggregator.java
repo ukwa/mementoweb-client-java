@@ -39,9 +39,11 @@ import javax.xml.xpath.XPathConstants;
 import javax.xml.xpath.XPathExpression;
 import javax.xml.xpath.XPathFactory;
 
+import org.apache.http.HttpHost;
 import org.apache.http.client.config.RequestConfig;
 import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.client.CloseableHttpClient;
+import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
 import org.apache.http.protocol.HttpContext;
@@ -109,11 +111,23 @@ public class MementosAggregator {
 		RequestConfig requestConfig = RequestConfig.custom()
 				.setConnectTimeout(timeoutSeconds * 1000)
 				.setSocketTimeout(timeoutSeconds * 1000).build();
+		// Proxy?
+		HttpHost proxy = null;
+		if( System.getProperty("http.proxyHost") != null ) {
+    		proxy = new HttpHost( System.getProperty("http.proxyHost"), 
+    				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
+    		log.debug("Proxying via "+proxy);
+    	} else {
+    		log.debug("No web proxy.");
+    	}
+    	// Set up the client:
 		httpClient = HttpClients.custom()
 				.setDefaultRequestConfig(requestConfig)
 				.disableRedirectHandling()
-				.setConnectionManager(cm).build();
-
+				.setConnectionManager(cm)
+			    .setProxy(proxy)
+			    .build();
+		
 	}
 
 	/**
