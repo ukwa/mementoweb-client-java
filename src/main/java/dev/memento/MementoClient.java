@@ -106,7 +106,7 @@ public class MementoClient {
     /**
      * 
      */
-    public MementoClient() {
+    private MementoClient() {
         // Set the date and time format
         SimpleDateTime.mDateFormat = DateFormat.getDateInstance(DateFormat.DEFAULT, Locale.US);
         SimpleDateTime.mTimeFormat = DateFormat.getTimeInstance(DateFormat.DEFAULT, Locale.US);        
@@ -114,8 +114,6 @@ public class MementoClient {
         // Holds all the timemaps for the web page being viewed
         mTimeMaps = new HashSet<TimeMap>();    	
         mMementos = new MementoList();       
-        //
-        setupHttpClient();
     }
 
     /**
@@ -125,11 +123,13 @@ public class MementoClient {
     public MementoClient(String timegate) {
     	this();
     	this.setTimegateUri(timegate);
+        setupHttpClient();
     }
     
     public MementoClient(String timegate, HttpClient httpClient) {
-    	this.httpClient = httpClient;
+    	this();
     	this.setTimegateUri(timegate);
+    	this.httpClient = httpClient;
     }
     
     /**

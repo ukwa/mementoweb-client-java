@@ -32,8 +32,7 @@ public class MementoClientTest {
 
 	@Before
 	public void setUp() throws Exception {
-		mc = new MementoClient();
-		mc.setTimegateUri("http://www.webarchive.org.uk/wayback/archive/");
+		mc = new MementoClient("http://www.webarchive.org.uk/wayback/archive/");
 	}
 
 	@Test
