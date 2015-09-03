@@ -148,7 +148,10 @@ public class MementoClient {
     	if( System.getProperty("http.proxyHost") != null ) {
     		HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
     				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
-    		httpClient.getParams().setParameter(ConnRoutePNames.DEFAULT_PROXY, proxy);
+    		httpClient = HttpClientBuilder.create()
+    			    .disableRedirectHandling()
+    			    .setProxy(proxy)
+    			    .build();
     		log.debug("Proxying via "+proxy);
     	} else {
     		log.debug("No web proxy.");
