@@ -23,10 +23,8 @@ package uk.bl.wa.memento.client;
  * #L%
  */
 
-import java.net.URI;
 import java.net.URL;
 import java.util.ArrayList;
-import java.util.Collection;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -41,12 +39,9 @@ import javax.xml.xpath.XPathFactory;
 
 import org.apache.http.HttpHost;
 import org.apache.http.client.config.RequestConfig;
-import org.apache.http.client.protocol.HttpClientContext;
 import org.apache.http.impl.client.CloseableHttpClient;
-import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.impl.client.HttpClients;
 import org.apache.http.impl.conn.PoolingHttpClientConnectionManager;
-import org.apache.http.protocol.HttpContext;
 import org.apache.log4j.Logger;
 import org.w3c.dom.Document;
 import org.w3c.dom.Node;
@@ -62,6 +57,12 @@ import dev.memento.MementoList;
  */
 public class MementosAggregator {
 	static Logger log = Logger.getLogger(MementosAggregator.class.getCanonicalName());
+
+	//
+	private int connectionTimeoutSeconds = 5;
+	
+	//
+	private int responseTimeoutSeconds   = 20;
 	
 	private PoolingHttpClientConnectionManager cm = new PoolingHttpClientConnectionManager();
 
@@ -106,9 +107,6 @@ public class MementosAggregator {
 		// Increase default max connection per route to 20
 		cm.setDefaultMaxPerRoute(20);
 
-		//
-		int connectionTimeoutSeconds = 5;
-		int responseTimeoutSeconds   = 20;
 		// Proxy?
 		HttpHost proxy = null;
 		if( System.getProperty("http.proxyHost") != null ) {
