@@ -128,7 +128,6 @@ public class MementoClient {
     }
     
     public MementoClient(String timegate, HttpClient httpClient) {
-    	this();
     	this.httpClient = httpClient;
     	this.setTimegateUri(timegate);
     }
