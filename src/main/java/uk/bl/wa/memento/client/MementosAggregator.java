@@ -108,9 +108,6 @@ public class MementosAggregator {
 
 		//
 		int timeoutSeconds = 15;
-		RequestConfig requestConfig = RequestConfig.custom()
-				.setConnectTimeout(timeoutSeconds * 1000)
-				.setSocketTimeout(timeoutSeconds * 1000).build();
 		// Proxy?
 		HttpHost proxy = null;
 		if( System.getProperty("http.proxyHost") != null ) {
@@ -120,12 +117,15 @@ public class MementosAggregator {
     	} else {
     		log.debug("No web proxy.");
     	}
+		// Set up request config:
+		RequestConfig requestConfig = RequestConfig.custom()
+				.setConnectTimeout(timeoutSeconds * 1000)
+				.setSocketTimeout(timeoutSeconds * 1000).setProxy(proxy).build();
     	// Set up the client:
 		httpClient = HttpClients.custom()
 				.setDefaultRequestConfig(requestConfig)
 				.disableRedirectHandling()
 				.setConnectionManager(cm)
-			    .setProxy(proxy)
 			    .build();
 		
 	}
@@ -174,14 +174,12 @@ public class MementosAggregator {
 	static class GetThread extends Thread {
 
 		private final MementoClient mc;
-		private final HttpContext context;
 		private final String url;
 		private ConcurrentHashMap<String, Memento> ms;
 
 		public GetThread(ConcurrentHashMap<String, Memento> ms, MementoClient mc, String url) {
 			this.ms = ms;
 			this.mc = mc;
-			this.context = HttpClientContext.create();
 			this.url = url;
 		}
 

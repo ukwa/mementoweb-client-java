@@ -129,8 +129,8 @@ public class MementoClient {
     
     public MementoClient(String timegate, HttpClient httpClient) {
     	this();
-    	this.setTimegateUri(timegate);
     	this.httpClient = httpClient;
+    	this.setTimegateUri(timegate);
     }
     
     /**
@@ -138,24 +138,24 @@ public class MementoClient {
      * @return
      */
     private void setupHttpClient() {
-    	if( httpClient != null) return;
+    	if( httpClient != null) {
+    		log.debug("Using existing httpClient...");
+    		return;
+    	}
     	
-    	// Disable automatic redirect handling so we can process the 302 ourself 
-		httpClient = HttpClientBuilder.create()
-			    .disableRedirectHandling()
-			    .build();
-		
+    	HttpHost proxy = null;
     	if( System.getProperty("http.proxyHost") != null ) {
-    		HttpHost proxy = new HttpHost( System.getProperty("http.proxyHost"), 
+    		proxy = new HttpHost( System.getProperty("http.proxyHost"), 
     				Integer.parseInt(System.getProperty("http.proxyPort")), "http");
-    		httpClient = HttpClientBuilder.create()
-    			    .disableRedirectHandling()
-    			    .setProxy(proxy)
-    			    .build();
     		log.debug("Proxying via "+proxy);
     	} else {
     		log.debug("No web proxy.");
     	}
+    	// Disable automatic redirect handling so we can process the 302 ourself 
+		httpClient = HttpClientBuilder.create()
+			    .disableRedirectHandling()
+			    .setProxy(proxy)
+			    .build();
     }
 
 		
