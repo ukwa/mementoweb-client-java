@@ -63,11 +63,12 @@ import org.apache.http.impl.client.CloseableHttpClient;
 import org.apache.http.impl.client.DefaultHttpClient;
 import org.apache.http.impl.client.HttpClientBuilder;
 import org.apache.http.util.EntityUtils;
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 
 public class MementoClient {
-	static Logger log = Logger.getLogger(MementoClient.class.getCanonicalName());
+	static Logger log = LogManager.getLogger(MementoClient.class.getCanonicalName());
 	
 	static final int DIALOG_DATE = 0;
     static final int DIALOG_ERROR = 1;

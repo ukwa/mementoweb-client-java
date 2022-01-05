@@ -21,10 +21,11 @@ package dev.memento;
  */
 
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 public class Link {
-	Logger log = Logger.getLogger(Link.class.getCanonicalName());
+	Logger log = LogManager.getLogger(Link.class.getCanonicalName());
 	
 	private String mUrl;
 	private String mRel;

@@ -51,11 +51,12 @@ import java.util.Map;
 import java.util.TreeMap;
 import java.util.TreeSet;
 
-import org.apache.log4j.Logger;
+import org.apache.logging.log4j.Logger;
+import org.apache.logging.log4j.LogManager;
 
 
 public class MementoList extends ArrayList<Memento> implements Serializable {
-	Logger log = Logger.getLogger(MementoList.class.getCanonicalName());
+	Logger log = LogManager.getLogger(MementoList.class.getCanonicalName());
 
 	private static final long serialVersionUID = 1L;
 
